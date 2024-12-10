@@ -10,7 +10,6 @@ import re
 import logging
 import sys
 import traceback
-from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
@@ -19,17 +18,6 @@ logging.basicConfig(
     stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
-
-def log_with_timestamp(message, level='info'):
-    """Add timestamp and request ID to logs"""
-    timestamp = datetime.now().isoformat()
-    request_id = request.headers.get('X-Request-ID', 'NO_ID')
-    log_message = f"[{timestamp}] [{request_id}] {message}"
-    
-    if level == 'error':
-        logger.error(log_message)
-    else:
-        logger.info(log_message)
 
 # Load environment variables
 load_dotenv()
@@ -40,7 +28,7 @@ CORS(app)
 # Initialize Anthropic client with API key
 api_key = os.getenv('ANTHROPIC_API_KEY')
 if not api_key:
-    log_with_timestamp("ANTHROPIC_API_KEY not found in environment variables", 'error')
+    logger.error("ANTHROPIC_API_KEY not found in environment variables")
     raise ValueError("ANTHROPIC_API_KEY not found")
 
 client = anthropic.Anthropic(api_key=api_key)
@@ -48,53 +36,63 @@ client = anthropic.Anthropic(api_key=api_key)
 # In-memory document store
 document_store = {}
 
-def extract_text_from_pdf(pdf_content):
-    """Extract text from PDF content"""
+@app.route('/analyze', methods=['POST', 'OPTIONS'])
+def analyze_document():
+    if request.method == 'OPTIONS':
+        return '', 204
+        
+    logger.info("Received analyze request")
+    logger.info(f"Request headers: {dict(request.headers)}")
+    logger.info(f"Request files: {request.files}")
+    
+    if 'file' not in request.files:
+        logger.error("No file provided in request")
+        return jsonify({'error': 'No file provided'}), 400
+    
+    file = request.files['file']
+    logger.info(f"Received file: {file.filename}")
+    
+    if file.filename == '':
+        logger.error("No file selected")
+        return jsonify({'error': 'No file selected'}), 400
+    
+    if not file.filename.endswith('.pdf'):
+        logger.error("Invalid file type")
+        return jsonify({'error': 'File must be a PDF'}), 400
+    
     try:
-        pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_content))
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text()
-        log_with_timestamp(f"Successfully extracted {len(text)} characters from PDF")
-        return text
-    except Exception as e:
-        log_with_timestamp(f"Error extracting text from PDF: {str(e)}\n{traceback.format_exc()}", 'error')
-        raise
-
-def fix_json_string(json_str):
-    """Fix common JSON formatting issues"""
-    try:
-        # Remove any text before the first { and after the last }
-        json_str = re.search(r'\{.*\}', json_str, re.DOTALL).group(0)
+        logger.info(f"Processing file: {file.filename}")
+        # Read the PDF file
+        pdf_content = file.read()
+        logger.info(f"Read {len(pdf_content)} bytes from file")
         
-        # Add missing commas between values in arrays and objects
-        json_str = re.sub(r'(\d+|\btrue\b|\bfalse\b|\bnull\b|"[^"]*")\s+(?=["{\[]|[a-zA-Z])', r'\1,', json_str)
+        # Extract text from PDF
+        try:
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_content))
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text()
+            logger.info(f"Extracted {len(text)} characters from PDF")
+        except Exception as e:
+            logger.error(f"Error extracting text from PDF: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({'error': 'Failed to read PDF file'}), 400
         
-        # Add missing commas between object properties
-        json_str = re.sub(r'(\}|\]|\d+|"[^"]*")\s*\n\s*"', r'\1,\n"', json_str)
+        # Generate document ID and store text
+        doc_id = str(hash(text))
+        document_store[doc_id] = text
+        logger.info(f"Stored document with ID: {doc_id}")
         
-        # Remove any trailing commas before closing brackets
-        json_str = re.sub(r',(\s*[\]}])', r'\1', json_str)
-        
-        # Validate JSON
-        json.loads(json_str)
-        return json_str
-    except Exception as e:
-        log_with_timestamp(f"Error fixing JSON string: {str(e)}\n{traceback.format_exc()}", 'error')
-        raise
-
-def analyze_with_claude(text):
-    """Send text to Claude for analysis"""
-    try:
-        log_with_timestamp("Starting Claude analysis")
-        message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=4000,
-            temperature=0,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"""Analyze this financial document and provide:
+        # Get analysis from Claude
+        try:
+            logger.info("Sending text to Claude for analysis")
+            message = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=4000,
+                temperature=0,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"""Analyze this financial document and provide:
 
 1. Key financial metrics:
    - Extract and verify all numerical values
@@ -148,90 +146,38 @@ Format the response in JSON with the following structure:
 
 Here's the document text:
 {text}"""
-                }
-            ]
-        )
-        
-        log_with_timestamp("Received response from Claude")
-        response_text = message.content[0].text
-        log_with_timestamp("Processing Claude response")
-        
-        try:
-            fixed_json = fix_json_string(response_text)
-            log_with_timestamp("Successfully processed Claude response")
-            return fixed_json
+                    }
+                ]
+            )
+            
+            logger.info("Received response from Claude")
+            response_text = message.content[0].text
+            
+            # Fix and validate JSON
+            try:
+                json_str = re.search(r'\{.*\}', response_text, re.DOTALL).group(0)
+                json_str = re.sub(r'(\d+|\btrue\b|\bfalse\b|\bnull\b|"[^"]*")\s+(?=["{\[]|[a-zA-Z])', r'\1,', json_str)
+                json_str = re.sub(r'(\}|\]|\d+|"[^"]*")\s*\n\s*"', r'\1,\n"', json_str)
+                json_str = re.sub(r',(\s*[\]}])', r'\1', json_str)
+                
+                # Validate JSON
+                json.loads(json_str)
+                logger.info("Successfully processed and validated JSON response")
+                
+                return jsonify({
+                    'analysis': json_str,
+                    'documentId': doc_id
+                })
+            except Exception as e:
+                logger.error(f"Error processing Claude response: {str(e)}\n{traceback.format_exc()}")
+                return jsonify({'error': 'Failed to process analysis results'}), 500
+                
         except Exception as e:
-            log_with_timestamp(f"Error processing Claude response: {str(e)}\n{traceback.format_exc()}", 'error')
-            return None
+            logger.error(f"Error getting analysis from Claude: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({'error': 'Failed to analyze document'}), 500
             
     except Exception as e:
-        log_with_timestamp(f"Error in Claude analysis: {str(e)}\n{traceback.format_exc()}", 'error')
-        return None
-
-@app.route('/')
-def index():
-    try:
-        return send_file('index.html')
-    except Exception as e:
-        log_with_timestamp(f"Error serving index.html: {str(e)}\n{traceback.format_exc()}", 'error')
-        return jsonify({'error': 'Error serving page'}), 500
-
-@app.route('/static/<path:path>')
-def serve_static(path):
-    try:
-        return send_from_directory('static', path)
-    except Exception as e:
-        log_with_timestamp(f"Error serving static file {path}: {str(e)}\n{traceback.format_exc()}", 'error')
-        return jsonify({'error': 'Error serving static file'}), 500
-
-@app.route('/analyze', methods=['POST', 'OPTIONS'])
-def analyze_document():
-    if request.method == 'OPTIONS':
-        return '', 204
-        
-    log_with_timestamp("Received analyze request")
-    
-    if 'file' not in request.files:
-        log_with_timestamp("No file provided", 'error')
-        return jsonify({'error': 'No file provided'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        log_with_timestamp("No file selected", 'error')
-        return jsonify({'error': 'No file selected'}), 400
-    
-    if not file.filename.endswith('.pdf'):
-        log_with_timestamp("Invalid file type", 'error')
-        return jsonify({'error': 'File must be a PDF'}), 400
-    
-    try:
-        log_with_timestamp(f"Processing file: {file.filename}")
-        # Read the PDF file
-        pdf_content = file.read()
-        
-        # Extract text from PDF
-        text = extract_text_from_pdf(pdf_content)
-        log_with_timestamp(f"Extracted text length: {len(text)}")
-        
-        # Generate document ID and store text
-        doc_id = str(hash(text))
-        document_store[doc_id] = text
-        
-        # Get analysis from Claude
-        analysis = analyze_with_claude(text)
-        
-        if analysis:
-            log_with_timestamp("Analysis completed successfully")
-            return jsonify({
-                'analysis': analysis,
-                'documentId': doc_id
-            })
-        else:
-            log_with_timestamp("Failed to get analysis from Claude", 'error')
-            return jsonify({'error': 'Failed to get properly formatted analysis from Claude'}), 500
-            
-    except Exception as e:
-        log_with_timestamp(f"Error processing document: {str(e)}\n{traceback.format_exc()}", 'error')
+        logger.error(f"Error processing document: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/ask', methods=['POST', 'OPTIONS'])
@@ -240,25 +186,27 @@ def ask():
     if request.method == 'OPTIONS':
         return '', 204
         
-    log_with_timestamp("Received question request")
+    logger.info("Received question request")
+    logger.info(f"Request headers: {dict(request.headers)}")
+    logger.info(f"Request body: {request.get_json()}")
     
     try:
         data = request.get_json()
     except Exception as e:
-        log_with_timestamp(f"Error parsing JSON request: {str(e)}\n{traceback.format_exc()}", 'error')
+        logger.error(f"Error parsing JSON request: {str(e)}")
         return jsonify({'error': 'Invalid JSON'}), 400
     
     if not data or 'question' not in data or 'documentId' not in data:
-        log_with_timestamp("Missing question or document ID", 'error')
+        logger.error("Missing question or document ID")
         return jsonify({'error': 'Missing question or document ID'}), 400
     
     doc_id = data['documentId']
     if doc_id not in document_store:
-        log_with_timestamp("Document not found", 'error')
+        logger.error(f"Document not found: {doc_id}")
         return jsonify({'error': 'Document not found. Please upload it again.'}), 404
     
     try:
-        log_with_timestamp("Sending question to Claude")
+        logger.info("Sending question to Claude")
         message = client.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=4000,
@@ -276,11 +224,27 @@ Provide a clear, concise answer based on the financial data. If the information 
                 }
             ]
         )
-        log_with_timestamp("Received answer from Claude")
+        logger.info("Received answer from Claude")
         return jsonify({'answer': message.content[0].text})
     except Exception as e:
-        log_with_timestamp(f"Error asking question: {str(e)}\n{traceback.format_exc()}", 'error')
+        logger.error(f"Error asking question: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'error': 'Failed to get answer from Claude'}), 500
+
+@app.route('/')
+def index():
+    try:
+        return send_file('index.html')
+    except Exception as e:
+        logger.error(f"Error serving index.html: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Error serving page'}), 500
+
+@app.route('/static/<path:path>')
+def serve_static(path):
+    try:
+        return send_from_directory('static', path)
+    except Exception as e:
+        logger.error(f"Error serving static file {path}: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Error serving static file'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
