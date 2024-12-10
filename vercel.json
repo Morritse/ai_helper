@@ -3,10 +3,11 @@
     "builds": [
         {
             "src": "app.py",
-            "use": "@vercel/python",
-            "config": {
-                "maxLambdaSize": "15mb"
-            }
+            "use": "@vercel/python"
+        },
+        {
+            "src": "*.html",
+            "use": "@vercel/static"
         },
         {
             "src": "static/**",
@@ -16,34 +17,25 @@
     "routes": [
         {
             "src": "/static/(.*)",
-            "dest": "/static/$1",
-            "headers": {
-                "cache-control": "public, max-age=31536000, immutable"
-            }
+            "dest": "/static/$1"
         },
         {
             "src": "/analyze",
             "methods": ["POST", "OPTIONS"],
-            "dest": "app.py",
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type"
-            }
+            "dest": "app.py"
         },
         {
             "src": "/ask",
             "methods": ["POST", "OPTIONS"],
-            "dest": "app.py",
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type"
-            }
+            "dest": "app.py"
+        },
+        {
+            "src": "/",
+            "dest": "/index.html"
         },
         {
             "src": "/(.*)",
-            "dest": "app.py"
+            "dest": "/$1"
         }
     ]
 }

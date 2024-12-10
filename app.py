@@ -4,7 +4,6 @@ import PyPDF2
 import io
 import anthropic
 import os
-from dotenv import load_dotenv
 import json
 import re
 import logging
@@ -19,19 +18,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv()
-
 app = Flask(__name__, static_url_path='/static')
 CORS(app)
 
-# Initialize Anthropic client with API key
-api_key = os.getenv('ANTHROPIC_API_KEY')
-if not api_key:
-    logger.error("ANTHROPIC_API_KEY not found in environment variables")
-    raise ValueError("ANTHROPIC_API_KEY not found")
-
-client = anthropic.Anthropic(api_key=api_key)
+# Initialize Anthropic client with hardcoded API key
+client = anthropic.Anthropic(
+    api_key="sk-ant-api03-6DhMEGAWyOxOHMXBK6-rrZOxOVoVDOE_CZH7kTHHAP0VwvQPLi5qSgEtcsJ_kxpGxQ-J-QLtgbOiGHjgvOSxQw-7s0GXQAA"
+)
 
 # In-memory document store
 document_store = {}
