@@ -23,7 +23,6 @@ CORS(app)
 
 # Initialize Anthropic client with hardcoded API key
 client = anthropic.Anthropic(
-    # Using the newer API key format
     api_key="sk-ant-api03-6DhMEGAWyOxOHMXBK6-rrZOxOVoVDOE_CZH7kTHHAP0VwvQPLi5qSgEtcsJ_kxpGxQ-J-QLtgbOiGHjgvOSxQw-7s0GXQAA"
 )
 
@@ -83,7 +82,7 @@ def analyze_document():
         try:
             logger.info("Sending text to Claude for analysis")
             message = client.messages.create(
-                model="claude-3-sonnet-20240229",
+                model="claude-3-5-sonnet-20241022",
                 max_tokens=4000,
                 temperature=0,
                 messages=[{
@@ -203,7 +202,7 @@ def ask():
     try:
         logger.info("Sending question to Claude")
         message = client.messages.create(
-            model="claude-3-sonnet-20240229",
+            model="claude-3-5-sonnet-20241022",
             max_tokens=4000,
             temperature=0,
             messages=[{
