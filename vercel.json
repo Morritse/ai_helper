@@ -25,5 +25,14 @@
                 "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
             }
         }
-    ]
+    ],
+    "functions": {
+        "app.py": {
+            "memory": 1024,
+            "maxDuration": 60
+        }
+    },
+    "env": {
+        "PYTHONUNBUFFERED": "1"
+    }
 }
