@@ -12,7 +12,14 @@ import re
 load_dotenv()
 
 app = Flask(__name__, static_url_path='/static')
-CORS(app)
+# Configure CORS to allow requests from any origin
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 # Initialize Anthropic client with API key
 client = anthropic.Anthropic(
@@ -32,24 +39,15 @@ def extract_text_from_pdf(pdf_content):
 
 def fix_json_string(json_str):
     """Fix common JSON formatting issues"""
-    # Remove any text before the first { and after the last }
     json_str = re.search(r'\{.*\}', json_str, re.DOTALL).group(0)
-    
-    # Add missing commas between values in arrays and objects
     json_str = re.sub(r'(\d+|\btrue\b|\bfalse\b|\bnull\b|"[^"]*")\s+(?=["{\[]|[a-zA-Z])', r'\1,', json_str)
-    
-    # Add missing commas between object properties
     json_str = re.sub(r'(\}|\]|\d+|"[^"]*")\s*\n\s*"', r'\1,\n"', json_str)
-    
-    # Remove any trailing commas before closing brackets
     json_str = re.sub(r',(\s*[\]}])', r'\1', json_str)
-    
     return json_str
 
 def analyze_with_claude(text):
     """Send text to Claude for analysis"""
     try:
-        print(f"Using model: claude-3-5-sonnet-20241022")
         message = client.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=4000,
@@ -114,37 +112,34 @@ Here's the document text:
                 }
             ]
         )
-        print("Claude response received")
         
-        # Get the response text
         response_text = message.content[0].text
-        print(f"Raw response: {response_text}")
         
-        # Fix and validate JSON
         try:
             fixed_json = fix_json_string(response_text)
-            print(f"Fixed JSON: {fixed_json}")
-            # Validate by parsing
-            json.loads(fixed_json)
+            json.loads(fixed_json)  # Validate JSON
             return fixed_json
         except Exception as e:
             print(f"Error fixing/validating JSON: {str(e)}")
             return None
             
     except Exception as e:
-        print(f"Detailed error in Claude analysis: {str(e)}")
+        print(f"Error in Claude analysis: {str(e)}")
         return None
 
-@app.route('/')
+@app.route('/', methods=['GET', 'OPTIONS'])
 def index():
     return send_file('index.html')
 
-@app.route('/static/<path:path>')
+@app.route('/static/<path:path>', methods=['GET', 'OPTIONS'])
 def serve_static(path):
     return send_from_directory('static', path)
 
-@app.route('/analyze', methods=['POST'])
+@app.route('/analyze', methods=['POST', 'OPTIONS'])
 def analyze_document():
+    if request.method == 'OPTIONS':
+        return '', 204
+        
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
     
@@ -182,9 +177,12 @@ def analyze_document():
         print(f"Error processing document: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/ask', methods=['POST'])
+@app.route('/ask', methods=['POST', 'OPTIONS'])
 def ask():
     """Handle questions about the analyzed document"""
+    if request.method == 'OPTIONS':
+        return '', 204
+        
     data = request.get_json()
     if not data or 'question' not in data or 'documentId' not in data:
         return jsonify({'error': 'Missing question or document ID'}), 400
