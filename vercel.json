@@ -17,7 +17,13 @@
         },
         {
             "src": "/(.*)",
-            "dest": "app.py"
+            "dest": "app.py",
+            "methods": ["GET", "POST", "OPTIONS"],
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
+            }
         }
     ]
 }

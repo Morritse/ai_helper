@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+<!-- Previous head content remains the same -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -134,6 +135,8 @@
         console.log('API Base URL:', API_BASE_URL);
 
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM Content Loaded');
+            
             const fileInput = document.getElementById('fileInput');
             const loadingDiv = document.getElementById('loadingIndicator');
             const resultsSection = document.querySelector('.results-section');
@@ -144,32 +147,23 @@
             const chatMessages = document.getElementById('chatMessages');
             const typingIndicator = document.getElementById('typingIndicator');
 
-            console.log('DOM loaded, setting up event listeners');
+            // File input change handler
+            fileInput.addEventListener('change', (e) => {
+                console.log('File input changed');
+                const files = e.target.files;
+                console.log('Files:', files);
+                if (files && files.length > 0) {
+                    const file = files[0];
+                    console.log('Selected file:', file.name, file.type, file.size);
+                    handleFileUpload(file);
+                }
+            });
 
-            // Previous chart creation and formatting functions remain the same
-
-            function showLoading(file) {
-                loadingDiv.style.display = 'block';
-                loadingDiv.querySelector('p').textContent = `Analyzing ${file.name}... Please wait...`;
-                uploadSection.style.display = 'none';
-                resultsSection.style.display = 'none';
-                errorMessage.style.display = 'none';
-            }
-
-            function hideLoading() {
-                loadingDiv.style.display = 'none';
-                uploadSection.style.display = 'block';
-            }
-
-            function showError(message) {
-                console.error('Error:', message);
-                errorMessage.textContent = message;
-                errorMessage.style.display = 'block';
-                resultsSection.style.display = 'none';
-                documentAnalyzed = false;
-                sendButton.disabled = true;
-                currentDocumentId = null;
-            }
+            // Click handler for the select button
+            document.querySelector('button').addEventListener('click', (e) => {
+                console.log('Select button clicked');
+                fileInput.click();
+            });
 
             async function handleFileUpload(file) {
                 console.log('Handling file upload:', file.name);
@@ -181,19 +175,26 @@
 
                 const formData = new FormData();
                 formData.append('file', file);
+                console.log('FormData created with file');
 
                 showLoading(file);
 
                 try {
-                    console.log('Sending file to server...');
+                    console.log('Sending request to:', `${API_BASE_URL}/analyze`);
                     const response = await fetch(`${API_BASE_URL}/analyze`, {
                         method: 'POST',
                         body: formData
                     });
 
+                    console.log('Response received:', response);
                     console.log('Response status:', response.status);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
                     const data = await response.json();
-                    console.log('Received data:', data);
+                    console.log('Response data:', data);
 
                     hideLoading();
                     
@@ -201,7 +202,10 @@
                         showError(data.error);
                     } else {
                         try {
+                            console.log('Parsing analysis:', data.analysis);
                             const analysis = JSON.parse(data.analysis);
+                            console.log('Parsed analysis:', analysis);
+                            
                             displayResults(analysis);
                             documentAnalyzed = true;
                             currentDocumentId = data.documentId;
@@ -213,55 +217,70 @@
                         }
                     }
                 } catch (error) {
-                    console.error('Network error:', error);
+                    console.error('Network or processing error:', error);
                     hideLoading();
-                    showError('Error analyzing document. Please check your connection and try again.');
+                    showError('Error analyzing document: ' + error.message);
                 }
             }
 
-            async function askQuestion(question) {
-                if (!currentDocumentId) {
-                    addMessage('Error: No document loaded. Please upload a document first.', false);
-                    return;
-                }
-
-                try {
-                    typingIndicator.style.display = 'block';
-                    sendButton.disabled = true;
-                    questionInput.disabled = true;
-
-                    const response = await fetch(`${API_BASE_URL}/ask`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            question: question,
-                            documentId: currentDocumentId
-                        })
-                    });
-
-                    const data = await response.json();
-                    
-                    if (data.error) {
-                        addMessage(`Error: ${data.error}`, false);
-                    } else {
-                        addMessage(data.answer, false);
-                    }
-                } catch (error) {
-                    console.error('Network error:', error);
-                    addMessage(`Error: Failed to get response. Please try again.`, false);
-                } finally {
-                    typingIndicator.style.display = 'none';
-                    sendButton.disabled = false;
-                    questionInput.disabled = false;
-                    questionInput.value = '';
-                    questionInput.focus();
-                }
+            function showLoading(file) {
+                console.log('Showing loading state for:', file.name);
+                loadingDiv.style.display = 'block';
+                loadingDiv.querySelector('p').textContent = `Analyzing ${file.name}... Please wait...`;
+                uploadSection.style.display = 'none';
+                resultsSection.style.display = 'none';
+                errorMessage.style.display = 'none';
             }
 
-            // Previous event listeners and display functions remain the same
-            // ... (rest of the code remains unchanged)
+            function hideLoading() {
+                console.log('Hiding loading state');
+                loadingDiv.style.display = 'none';
+                uploadSection.style.display = 'block';
+            }
+
+            function showError(message) {
+                console.error('Showing error:', message);
+                errorMessage.textContent = message;
+                errorMessage.style.display = 'block';
+                resultsSection.style.display = 'none';
+                documentAnalyzed = false;
+                sendButton.disabled = true;
+                currentDocumentId = null;
+            }
+
+            // Rest of your existing code (createCharts, displayResults, etc.)
+            // ... Add console.log statements in those functions as well
+
+            // Drag and drop handlers
+            uploadSection.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('File dragged over upload section');
+                uploadSection.style.borderColor = '#007bff';
+            });
+
+            uploadSection.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('File dragged out of upload section');
+                uploadSection.style.borderColor = '#ccc';
+            });
+
+            uploadSection.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('File dropped');
+                uploadSection.style.borderColor = '#ccc';
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    console.log('Dropped file:', files[0].name);
+                    handleFileUpload(files[0]);
+                }
+            });
+
+            // Previous functions remain the same
+            // ... (createCharts, displayResults, etc.)
         });
     </script>
 
