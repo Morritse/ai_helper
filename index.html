@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Document Analyzer</title>
+    <link rel="stylesheet" href="static/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Financial Document Analyzer</h1>
+        
+        <div class="upload-section" id="uploadSection">
+            <input type="file" id="fileInput" accept=".pdf" />
+            <button onclick="document.getElementById('fileInput').click()">Select PDF Document</button>
+            <p>Drop PDF file here or click to select</p>
+        </div>
+
+        <div class="loading" id="loadingIndicator">
+            <div class="spinner"></div>
+            <p>Analyzing document... Please wait...</p>
+        </div>
+
+        <div class="error-message"></div>
+
+        <div class="results-section">
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <h3>Revenue</h3>
+                    <p id="revenue">-</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Net Income</h3>
+                    <p id="netIncome">-</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Total Assets</h3>
+                    <p id="totalAssets">-</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Total Liabilities</h3>
+                    <p id="totalLiabilities">-</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Cash Flow</h3>
+                    <p id="cashFlow">-</p>
+                </div>
+            </div>
+
+            <div class="charts-section">
+                <div class="chart-container">
+                    <canvas id="metricsChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="ratiosChart"></canvas>
+                </div>
+            </div>
+
+            <div class="credit-score-container">
+                <div class="credit-score">
+                    <h3>Credit Score</h3>
+                    <div class="score-display">
+                        <div id="scoreValue">-</div>
+                        <div class="score-scale">0-100</div>
+                    </div>
+                </div>
+                <div class="credit-interpretation">
+                    <h4>Score Interpretation</h4>
+                    <p>
+                        0-40: Poor financial health - High risk<br>
+                        41-60: Fair - Moderate risk<br>
+                        61-80: Good - Low risk<br>
+                        81-100: Excellent - Very low risk
+                    </p>
+                </div>
+            </div>
+
+            <div class="analysis-grid">
+                <div class="health-assessment">
+                    <h3>Financial Health Assessment</h3>
+                    <p id="healthAssessment">-</p>
+                </div>
+
+                <div class="ratios-grid">
+                    <div class="ratio-card">
+                        <h4>Debt to Equity</h4>
+                        <p id="debtToEquity">-</p>
+                    </div>
+                    <div class="ratio-card">
+                        <h4>Current Ratio</h4>
+                        <p id="currentRatio">-</p>
+                    </div>
+                    <div class="ratio-card">
+                        <h4>Quick Ratio</h4>
+                        <p id="quickRatio">-</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="analysis-grid">
+                <div class="risk-factors">
+                    <h3>Risk Factors</h3>
+                    <ul id="riskFactors"></ul>
+                </div>
+
+                <div class="recommendations">
+                    <h3>Recommendations</h3>
+                    <ul id="recommendations"></ul>
+                </div>
+            </div>
+
+            <!-- Chat Interface -->
+            <div class="chat-section">
+                <h3>Ask Questions About the Document</h3>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="typing-indicator" id="typingIndicator">Insight is thinking...</div>
+                <div class="chat-input-container">
+                    <input type="text" id="questionInput" placeholder="Ask a question about the financial document..." />
+                    <button class="send-button" id="sendButton" disabled>Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let metricsChart = null;
+        let ratiosChart = null;
+        let documentAnalyzed = false;
+        let currentDocumentId = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const fileInput = document.getElementById('fileInput');
+            const loadingDiv = document.getElementById('loadingIndicator');
+            const resultsSection = document.querySelector('.results-section');
+            const errorMessage = document.querySelector('.error-message');
+            const uploadSection = document.getElementById('uploadSection');
+            const questionInput = document.getElementById('questionInput');
+            const sendButton = document.getElementById('sendButton');
+            const chatMessages = document.getElementById('chatMessages');
+            const typingIndicator = document.getElementById('typingIndicator');
+
+            console.log('DOM loaded, setting up event listeners');
+
+            function createCharts(data) {
+                // Destroy existing charts if they exist
+                if (metricsChart) metricsChart.destroy();
+                if (ratiosChart) ratiosChart.destroy();
+
+                // Create metrics chart
+                const metricsCtx = document.getElementById('metricsChart').getContext('2d');
+                metricsChart = new Chart(metricsCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Revenue', 'Net Income', 'Cash Flow'],
+                        datasets: [{
+                            label: 'Financial Metrics (in millions)',
+                            data: [
+                                data.metrics.revenue / 1000000,
+                                data.metrics.net_income / 1000000,
+                                data.metrics.cash_flow / 1000000
+                            ],
+                            backgroundColor: [
+                                'rgba(54, 162, 235, 0.5)',
+                                'rgba(75, 192, 192, 0.5)',
+                                'rgba(255, 159, 64, 0.5)'
+                            ],
+                            borderColor: [
+                                'rgba(54, 162, 235, 1)',
+                                'rgba(75, 192, 192, 1)',
+                                'rgba(255, 159, 64, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Key Financial Metrics'
+                            }
+                        }
+                    }
+                });
+
+                // Create ratios chart
+                const ratiosCtx = document.getElementById('ratiosChart').getContext('2d');
+                ratiosChart = new Chart(ratiosCtx, {
+                    type: 'radar',
+                    data: {
+                        labels: ['Debt to Equity', 'Current Ratio', 'Quick Ratio'],
+                        datasets: [{
+                            label: 'Financial Ratios',
+                            data: [
+                                data.ratios.debt_to_equity,
+                                data.ratios.current_ratio,
+                                data.ratios.quick_ratio
+                            ],
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Financial Ratios Analysis'
+                            }
+                        }
+                    }
+                });
+            }
+
+            function formatCurrency(value) {
+                if (value === null || value === undefined) return 'Not Available';
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }).format(value);
+            }
+
+            function formatRatio(value) {
+                if (value === null || value === undefined) return 'Not Available';
+                return value.toFixed(2);
+            }
+
+            function showLoading(file) {
+                loadingDiv.style.display = 'block';
+                loadingDiv.querySelector('p').textContent = `Analyzing ${file.name}... Please wait...`;
+                uploadSection.style.display = 'none';
+                resultsSection.style.display = 'none';
+                errorMessage.style.display = 'none';
+            }
+
+            function hideLoading() {
+                loadingDiv.style.display = 'none';
+                uploadSection.style.display = 'block';
+            }
+
+            function showError(message) {
+                errorMessage.textContent = message;
+                errorMessage.style.display = 'block';
+                resultsSection.style.display = 'none';
+                documentAnalyzed = false;
+                sendButton.disabled = true;
+                currentDocumentId = null;
+            }
+
+            function displayResults(analysis) {
+                // Update metrics
+                document.getElementById('revenue').textContent = formatCurrency(analysis.metrics.revenue);
+                document.getElementById('netIncome').textContent = formatCurrency(analysis.metrics.net_income);
+                document.getElementById('totalAssets').textContent = formatCurrency(analysis.metrics.total_assets);
+                document.getElementById('totalLiabilities').textContent = formatCurrency(analysis.metrics.total_liabilities);
+                document.getElementById('cashFlow').textContent = formatCurrency(analysis.metrics.cash_flow);
+
+                // Update ratios
+                document.getElementById('debtToEquity').textContent = formatRatio(analysis.ratios.debt_to_equity);
+                document.getElementById('currentRatio').textContent = formatRatio(analysis.ratios.current_ratio);
+                document.getElementById('quickRatio').textContent = formatRatio(analysis.ratios.quick_ratio);
+
+                // Update health assessment
+                document.getElementById('healthAssessment').textContent = analysis.health_assessment;
+
+                // Update risk factors
+                const riskList = document.getElementById('riskFactors');
+                riskList.innerHTML = '';
+                analysis.risk_factors.forEach(risk => {
+                    const li = document.createElement('li');
+                    li.textContent = risk;
+                    riskList.appendChild(li);
+                });
+
+                // Update recommendations
+                const recList = document.getElementById('recommendations');
+                recList.innerHTML = '';
+                analysis.recommendations.forEach(rec => {
+                    const li = document.createElement('li');
+                    li.textContent = rec;
+                    recList.appendChild(li);
+                });
+
+                // Update credit score
+                document.getElementById('scoreValue').textContent = analysis.credit_score;
+
+                // Create charts
+                createCharts(analysis);
+
+                // Show results section
+                resultsSection.style.display = 'block';
+            }
+
+            function addMessage(content, isUser = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `chat-message ${isUser ? 'user-message' : 'assistant-message'}`;
+                messageDiv.textContent = content;
+
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'message-time';
+                timeDiv.textContent = new Date().toLocaleTimeString();
+                messageDiv.appendChild(timeDiv);
+
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            async function askQuestion(question) {
+                if (!currentDocumentId) {
+                    addMessage('Error: No document loaded. Please upload a document first.', false);
+                    return;
+                }
+
+                try {
+                    typingIndicator.style.display = 'block';
+                    sendButton.disabled = true;
+                    questionInput.disabled = true;
+
+                    const response = await fetch('http://localhost:5000/ask', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            question: question,
+                            documentId: currentDocumentId
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        addMessage(`Error: ${data.error}`, false);
+                    } else {
+                        addMessage(data.answer, false);
+                    }
+                } catch (error) {
+                    addMessage(`Error: ${error.message}`, false);
+                } finally {
+                    typingIndicator.style.display = 'none';
+                    sendButton.disabled = false;
+                    questionInput.disabled = false;
+                    questionInput.value = '';
+                    questionInput.focus();
+                }
+            }
+
+            function handleFileUpload(file) {
+                console.log('Handling file upload:', file.name);
+                
+                if (!file.name.endsWith('.pdf')) {
+                    showError('Please select a PDF file');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                showLoading(file);
+
+                console.log('Sending file to server...');
+                fetch('http://localhost:5000/analyze', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    console.log('Received response:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Received data:', data);
+                    hideLoading();
+                    
+                    if (data.error) {
+                        showError(data.error);
+                    } else {
+                        try {
+                            const analysis = JSON.parse(data.analysis);
+                            displayResults(analysis);
+                            documentAnalyzed = true;
+                            currentDocumentId = data.documentId;
+                            sendButton.disabled = !questionInput.value.trim();
+                            addMessage("I've analyzed the document. Feel free to ask any specific questions about the financial data!", false);
+                        } catch (e) {
+                            console.error('Error parsing analysis:', e);
+                            showError('Error parsing analysis results: ' + e.message);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    hideLoading();
+                    showError('Error analyzing document: ' + error.message);
+                });
+            }
+
+            // File input change handler
+            fileInput.addEventListener('change', (e) => {
+                console.log('File input changed');
+                if (e.target.files.length > 0) {
+                    handleFileUpload(e.target.files[0]);
+                }
+            });
+
+            // Drag and drop handlers
+            uploadSection.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadSection.style.borderColor = '#007bff';
+            });
+
+            uploadSection.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadSection.style.borderColor = '#ccc';
+            });
+
+            uploadSection.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadSection.style.borderColor = '#ccc';
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFileUpload(files[0]);
+                }
+            });
+
+            // Question input handlers
+            questionInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey && questionInput.value.trim() && documentAnalyzed) {
+                    const question = questionInput.value.trim();
+                    addMessage(question, true);
+                    askQuestion(question);
+                }
+            });
+
+            questionInput.addEventListener('input', () => {
+                sendButton.disabled = !questionInput.value.trim() || !documentAnalyzed;
+            });
+
+            sendButton.addEventListener('click', () => {
+                if (questionInput.value.trim() && documentAnalyzed) {
+                    const question = questionInput.value.trim();
+                    addMessage(question, true);
+                    askQuestion(question);
+                }
+            });
+        });
+    </script>
+
+    <style>
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin: 20px 0;
+        }
+
+        .loading p {
+            margin: 10px 0 0 0;
+            color: #007bff;
+            font-weight: bold;
+        }
+    </style>
+</body>
+</html>
