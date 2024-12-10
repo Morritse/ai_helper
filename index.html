@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-<!-- Previous head content remains the same -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -130,13 +129,7 @@
         let documentAnalyzed = false;
         let currentDocumentId = null;
 
-        // Get the current URL's origin or use the production URL
-        const API_BASE_URL = window.location.origin;
-        console.log('API Base URL:', API_BASE_URL);
-
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM Content Loaded');
-            
             const fileInput = document.getElementById('fileInput');
             const loadingDiv = document.getElementById('loadingIndicator');
             const resultsSection = document.querySelector('.results-section');
@@ -147,23 +140,177 @@
             const chatMessages = document.getElementById('chatMessages');
             const typingIndicator = document.getElementById('typingIndicator');
 
-            // File input change handler
-            fileInput.addEventListener('change', (e) => {
-                console.log('File input changed');
-                const files = e.target.files;
-                console.log('Files:', files);
-                if (files && files.length > 0) {
-                    const file = files[0];
-                    console.log('Selected file:', file.name, file.type, file.size);
-                    handleFileUpload(file);
-                }
-            });
+            console.log('DOM loaded, setting up event listeners');
 
-            // Click handler for the select button
-            document.querySelector('button').addEventListener('click', (e) => {
-                console.log('Select button clicked');
-                fileInput.click();
-            });
+            function createCharts(data) {
+                // Destroy existing charts if they exist
+                if (metricsChart) metricsChart.destroy();
+                if (ratiosChart) ratiosChart.destroy();
+
+                // Create metrics chart
+                const metricsCtx = document.getElementById('metricsChart').getContext('2d');
+                metricsChart = new Chart(metricsCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Revenue', 'Net Income', 'Cash Flow'],
+                        datasets: [{
+                            label: 'Financial Metrics (in millions)',
+                            data: [
+                                data.metrics.revenue / 1000000,
+                                data.metrics.net_income / 1000000,
+                                data.metrics.cash_flow / 1000000
+                            ],
+                            backgroundColor: [
+                                'rgba(54, 162, 235, 0.5)',
+                                'rgba(75, 192, 192, 0.5)',
+                                'rgba(255, 159, 64, 0.5)'
+                            ],
+                            borderColor: [
+                                'rgba(54, 162, 235, 1)',
+                                'rgba(75, 192, 192, 1)',
+                                'rgba(255, 159, 64, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Key Financial Metrics'
+                            }
+                        }
+                    }
+                });
+
+                // Create ratios chart
+                const ratiosCtx = document.getElementById('ratiosChart').getContext('2d');
+                ratiosChart = new Chart(ratiosCtx, {
+                    type: 'radar',
+                    data: {
+                        labels: ['Debt to Equity', 'Current Ratio', 'Quick Ratio'],
+                        datasets: [{
+                            label: 'Financial Ratios',
+                            data: [
+                                data.ratios.debt_to_equity,
+                                data.ratios.current_ratio,
+                                data.ratios.quick_ratio
+                            ],
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Financial Ratios Analysis'
+                            }
+                        }
+                    }
+                });
+            }
+
+            function formatCurrency(value) {
+                if (value === null || value === undefined) return 'Not Available';
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }).format(value);
+            }
+
+            function formatRatio(value) {
+                if (value === null || value === undefined) return 'Not Available';
+                return value.toFixed(2);
+            }
+
+            function showLoading(file) {
+                console.log('Showing loading state for:', file.name);
+                loadingDiv.style.display = 'block';
+                loadingDiv.querySelector('p').textContent = `Analyzing ${file.name}... Please wait...`;
+                uploadSection.style.display = 'none';
+                resultsSection.style.display = 'none';
+                errorMessage.style.display = 'none';
+            }
+
+            function hideLoading() {
+                console.log('Hiding loading state');
+                loadingDiv.style.display = 'none';
+                uploadSection.style.display = 'block';
+            }
+
+            function showError(message) {
+                console.error('Showing error:', message);
+                errorMessage.textContent = message;
+                errorMessage.style.display = 'block';
+                resultsSection.style.display = 'none';
+                documentAnalyzed = false;
+                sendButton.disabled = true;
+                currentDocumentId = null;
+            }
+
+            function displayResults(analysis) {
+                // Update metrics
+                document.getElementById('revenue').textContent = formatCurrency(analysis.metrics.revenue);
+                document.getElementById('netIncome').textContent = formatCurrency(analysis.metrics.net_income);
+                document.getElementById('totalAssets').textContent = formatCurrency(analysis.metrics.total_assets);
+                document.getElementById('totalLiabilities').textContent = formatCurrency(analysis.metrics.total_liabilities);
+                document.getElementById('cashFlow').textContent = formatCurrency(analysis.metrics.cash_flow);
+
+                // Update ratios
+                document.getElementById('debtToEquity').textContent = formatRatio(analysis.ratios.debt_to_equity);
+                document.getElementById('currentRatio').textContent = formatRatio(analysis.ratios.current_ratio);
+                document.getElementById('quickRatio').textContent = formatRatio(analysis.ratios.quick_ratio);
+
+                // Update health assessment
+                document.getElementById('healthAssessment').textContent = analysis.health_assessment;
+
+                // Update risk factors
+                const riskList = document.getElementById('riskFactors');
+                riskList.innerHTML = '';
+                analysis.risk_factors.forEach(risk => {
+                    const li = document.createElement('li');
+                    li.textContent = risk;
+                    riskList.appendChild(li);
+                });
+
+                // Update recommendations
+                const recList = document.getElementById('recommendations');
+                recList.innerHTML = '';
+                analysis.recommendations.forEach(rec => {
+                    const li = document.createElement('li');
+                    li.textContent = rec;
+                    recList.appendChild(li);
+                });
+
+                // Update credit score
+                document.getElementById('scoreValue').textContent = analysis.credit_score;
+
+                // Create charts
+                createCharts(analysis);
+
+                // Show results section
+                resultsSection.style.display = 'block';
+            }
+
+            function addMessage(content, isUser = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `chat-message ${isUser ? 'user-message' : 'assistant-message'}`;
+                messageDiv.textContent = content;
+
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'message-time';
+                timeDiv.textContent = new Date().toLocaleTimeString();
+                messageDiv.appendChild(timeDiv);
+
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
 
             async function handleFileUpload(file) {
                 console.log('Handling file upload:', file.name);
@@ -175,13 +322,12 @@
 
                 const formData = new FormData();
                 formData.append('file', file);
-                console.log('FormData created with file');
 
                 showLoading(file);
 
                 try {
-                    console.log('Sending request to:', `${API_BASE_URL}/analyze`);
-                    const response = await fetch(`${API_BASE_URL}/analyze`, {
+                    console.log('Sending file to server...');
+                    const response = await fetch('/analyze', {
                         method: 'POST',
                         body: formData
                     });
@@ -223,33 +369,58 @@
                 }
             }
 
-            function showLoading(file) {
-                console.log('Showing loading state for:', file.name);
-                loadingDiv.style.display = 'block';
-                loadingDiv.querySelector('p').textContent = `Analyzing ${file.name}... Please wait...`;
-                uploadSection.style.display = 'none';
-                resultsSection.style.display = 'none';
-                errorMessage.style.display = 'none';
+            async function askQuestion(question) {
+                if (!currentDocumentId) {
+                    addMessage('Error: No document loaded. Please upload a document first.', false);
+                    return;
+                }
+
+                try {
+                    typingIndicator.style.display = 'block';
+                    sendButton.disabled = true;
+                    questionInput.disabled = true;
+
+                    const response = await fetch('/ask', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            question: question,
+                            documentId: currentDocumentId
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        addMessage(`Error: ${data.error}`, false);
+                    } else {
+                        addMessage(data.answer, false);
+                    }
+                } catch (error) {
+                    console.error('Network error:', error);
+                    addMessage(`Error: Failed to get response. Please try again.`, false);
+                } finally {
+                    typingIndicator.style.display = 'none';
+                    sendButton.disabled = false;
+                    questionInput.disabled = false;
+                    questionInput.value = '';
+                    questionInput.focus();
+                }
             }
 
-            function hideLoading() {
-                console.log('Hiding loading state');
-                loadingDiv.style.display = 'none';
-                uploadSection.style.display = 'block';
-            }
-
-            function showError(message) {
-                console.error('Showing error:', message);
-                errorMessage.textContent = message;
-                errorMessage.style.display = 'block';
-                resultsSection.style.display = 'none';
-                documentAnalyzed = false;
-                sendButton.disabled = true;
-                currentDocumentId = null;
-            }
-
-            // Rest of your existing code (createCharts, displayResults, etc.)
-            // ... Add console.log statements in those functions as well
+            // File input change handler
+            fileInput.addEventListener('change', (e) => {
+                console.log('File input changed');
+                const files = e.target.files;
+                console.log('Files:', files);
+                if (files && files.length > 0) {
+                    const file = files[0];
+                    console.log('Selected file:', file.name, file.type, file.size);
+                    handleFileUpload(file);
+                }
+            });
 
             // Drag and drop handlers
             uploadSection.addEventListener('dragover', (e) => {
@@ -279,8 +450,26 @@
                 }
             });
 
-            // Previous functions remain the same
-            // ... (createCharts, displayResults, etc.)
+            // Question input handlers
+            questionInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey && questionInput.value.trim() && documentAnalyzed) {
+                    const question = questionInput.value.trim();
+                    addMessage(question, true);
+                    askQuestion(question);
+                }
+            });
+
+            questionInput.addEventListener('input', () => {
+                sendButton.disabled = !questionInput.value.trim() || !documentAnalyzed;
+            });
+
+            sendButton.addEventListener('click', () => {
+                if (questionInput.value.trim() && documentAnalyzed) {
+                    const question = questionInput.value.trim();
+                    addMessage(question, true);
+                    askQuestion(question);
+                }
+            });
         });
     </script>
 
