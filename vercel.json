@@ -5,7 +5,8 @@
             "src": "app.py",
             "use": "@vercel/python",
             "config": {
-                "maxLambdaSize": "15mb"
+                "maxLambdaSize": "15mb",
+                "maxDuration": 60
             }
         },
         {
@@ -50,13 +51,5 @@
             "src": "/(.*)",
             "dest": "/$1"
         }
-    ],
-    "functions": {
-        "api/*.py": {
-            "maxDuration": 60
-        },
-        "app.py": {
-            "maxDuration": 60
-        }
-    }
+    ]
 }
