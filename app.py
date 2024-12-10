@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 import PyPDF2
 import io
@@ -7,17 +7,16 @@ import os
 from dotenv import load_dotenv
 import json
 import re
-import sys
 import logging
+import sys
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
 logger = logging.getLogger(__name__)
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
 
 # Load environment variables
 load_dotenv()
@@ -26,11 +25,14 @@ app = Flask(__name__, static_url_path='/static')
 CORS(app)
 
 # Initialize Anthropic client with API key
-client = anthropic.Anthropic(
-    api_key=os.getenv('ANTHROPIC_API_KEY')
-)
+api_key = os.getenv('ANTHROPIC_API_KEY')
+if not api_key:
+    logger.error("ANTHROPIC_API_KEY not found in environment variables")
+    raise ValueError("ANTHROPIC_API_KEY not found")
 
-# In-memory document store (Note: In production, use a proper database)
+client = anthropic.Anthropic(api_key=api_key)
+
+# In-memory document store
 document_store = {}
 
 def extract_text_from_pdf(pdf_content):
@@ -49,10 +51,18 @@ def extract_text_from_pdf(pdf_content):
 def fix_json_string(json_str):
     """Fix common JSON formatting issues"""
     try:
+        # Remove any text before the first { and after the last }
         json_str = re.search(r'\{.*\}', json_str, re.DOTALL).group(0)
+        
+        # Add missing commas between values in arrays and objects
         json_str = re.sub(r'(\d+|\btrue\b|\bfalse\b|\bnull\b|"[^"]*")\s+(?=["{\[]|[a-zA-Z])', r'\1,', json_str)
+        
+        # Add missing commas between object properties
         json_str = re.sub(r'(\}|\]|\d+|"[^"]*")\s*\n\s*"', r'\1,\n"', json_str)
+        
+        # Remove any trailing commas before closing brackets
         json_str = re.sub(r',(\s*[\]}])', r'\1', json_str)
+        
         # Validate JSON
         json.loads(json_str)
         return json_str
@@ -145,17 +155,21 @@ Here's the document text:
         logger.error(f"Error in Claude analysis: {str(e)}")
         return None
 
-@app.route('/', methods=['GET', 'OPTIONS'])
+@app.route('/')
 def index():
-    if request.method == 'OPTIONS':
-        return '', 204
-    return send_file('index.html')
+    try:
+        return send_file('index.html')
+    except Exception as e:
+        logger.error(f"Error serving index.html: {str(e)}")
+        return jsonify({'error': 'Error serving page'}), 500
 
-@app.route('/static/<path:path>', methods=['GET', 'OPTIONS'])
+@app.route('/static/<path:path>')
 def serve_static(path):
-    if request.method == 'OPTIONS':
-        return '', 204
-    return send_from_directory('static', path)
+    try:
+        return send_from_directory('static', path)
+    except Exception as e:
+        logger.error(f"Error serving static file {path}: {str(e)}")
+        return jsonify({'error': 'Error serving static file'}), 500
 
 @app.route('/analyze', methods=['POST', 'OPTIONS'])
 def analyze_document():
@@ -215,7 +229,12 @@ def ask():
         
     logger.info("Received question request")
     
-    data = request.get_json()
+    try:
+        data = request.get_json()
+    except Exception as e:
+        logger.error(f"Error parsing JSON request: {str(e)}")
+        return jsonify({'error': 'Invalid JSON'}), 400
+    
     if not data or 'question' not in data or 'documentId' not in data:
         logger.error("Missing question or document ID")
         return jsonify({'error': 'Missing question or document ID'}), 400
