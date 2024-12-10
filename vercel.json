@@ -16,16 +16,34 @@
     "routes": [
         {
             "src": "/static/(.*)",
-            "dest": "/static/$1"
+            "dest": "/static/$1",
+            "headers": {
+                "cache-control": "public, max-age=31536000, immutable"
+            }
         },
         {
-            "src": "/(.*)",
+            "src": "/analyze",
+            "methods": ["POST", "OPTIONS"],
             "dest": "app.py",
             "headers": {
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
                 "Access-Control-Allow-Headers": "Content-Type"
             }
+        },
+        {
+            "src": "/ask",
+            "methods": ["POST", "OPTIONS"],
+            "dest": "app.py",
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type"
+            }
+        },
+        {
+            "src": "/(.*)",
+            "dest": "app.py"
         }
     ]
 }

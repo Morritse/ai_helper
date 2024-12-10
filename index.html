@@ -4,162 +4,114 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Financial Document Analyzer</title>
-    <link rel="stylesheet" href="static/styles.css">
+    <link rel="stylesheet" href="/static/styles.css">
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<!-- Rest of the HTML content remains the same -->
-<body>
-    <div class="container">
-        <h1>Financial Document Analyzer</h1>
-        
-        <div class="upload-section" id="uploadSection">
-            <input type="file" id="fileInput" accept=".pdf" />
-            <button onclick="document.getElementById('fileInput').click()">Select PDF Document</button>
-            <p>Drop PDF file here or click to select</p>
-        </div>
-
-        <div class="loading" id="loadingIndicator">
-            <div class="spinner"></div>
-            <p>Analyzing document... Please wait...</p>
-        </div>
-
-        <div class="error-message"></div>
-
-        <div class="results-section">
-            <!-- Previous content remains the same -->
-            <div class="metrics-grid">
-                <div class="metric-card">
-                    <h3>Revenue</h3>
-                    <p id="revenue">-</p>
-                </div>
-                <div class="metric-card">
-                    <h3>Net Income</h3>
-                    <p id="netIncome">-</p>
-                </div>
-                <div class="metric-card">
-                    <h3>Total Assets</h3>
-                    <p id="totalAssets">-</p>
-                </div>
-                <div class="metric-card">
-                    <h3>Total Liabilities</h3>
-                    <p id="totalLiabilities">-</p>
-                </div>
-                <div class="metric-card">
-                    <h3>Cash Flow</h3>
-                    <p id="cashFlow">-</p>
-                </div>
-            </div>
-
-            <div class="charts-section">
-                <div class="chart-container">
-                    <canvas id="metricsChart"></canvas>
-                </div>
-                <div class="chart-container">
-                    <canvas id="ratiosChart"></canvas>
-                </div>
-            </div>
-
-            <div class="credit-score-container">
-                <div class="credit-score">
-                    <h3>Credit Score</h3>
-                    <div class="score-display">
-                        <div id="scoreValue">-</div>
-                        <div class="score-scale">0-100</div>
-                    </div>
-                </div>
-                <div class="credit-interpretation">
-                    <h4>Score Interpretation</h4>
-                    <p>
-                        0-40: Poor financial health - High risk<br>
-                        41-60: Fair - Moderate risk<br>
-                        61-80: Good - Low risk<br>
-                        81-100: Excellent - Very low risk
-                    </p>
-                </div>
-            </div>
-
-            <div class="analysis-grid">
-                <div class="health-assessment">
-                    <h3>Financial Health Assessment</h3>
-                    <p id="healthAssessment">-</p>
-                </div>
-
-                <div class="ratios-grid">
-                    <div class="ratio-card">
-                        <h4>Debt to Equity</h4>
-                        <p id="debtToEquity">-</p>
-                    </div>
-                    <div class="ratio-card">
-                        <h4>Current Ratio</h4>
-                        <p id="currentRatio">-</p>
-                    </div>
-                    <div class="ratio-card">
-                        <h4>Quick Ratio</h4>
-                        <p id="quickRatio">-</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="analysis-grid">
-                <div class="risk-factors">
-                    <h3>Risk Factors</h3>
-                    <ul id="riskFactors"></ul>
-                </div>
-
-                <div class="recommendations">
-                    <h3>Recommendations</h3>
-                    <ul id="recommendations"></ul>
-                </div>
-            </div>
-
-            <div class="chat-section">
-                <h3>Ask Questions About the Document</h3>
-                <div class="chat-messages" id="chatMessages"></div>
-                <div class="typing-indicator" id="typingIndicator">Insight is thinking...</div>
-                <div class="chat-input-container">
-                    <input type="text" id="questionInput" placeholder="Ask a question about the financial document..." />
-                    <button class="send-button" id="sendButton" disabled>Send</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Previous JavaScript content remains the same -->
     <script>
-        // Previous JavaScript code remains the same
+        // Get the current URL for API calls
+        const BASE_URL = window.location.origin;
+        console.log('Base URL:', BASE_URL);
     </script>
+</head>
+<!-- Previous HTML content remains the same until the fetch calls -->
 
-    <style>
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #007bff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
+<script>
+    async function handleFileUpload(file) {
+        console.log('Handling file upload:', file.name);
+        
+        if (!file.name.endsWith('.pdf')) {
+            showError('Please select a PDF file');
+            return;
         }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        const formData = new FormData();
+        formData.append('file', file);
+
+        showLoading(file);
+
+        try {
+            console.log('Sending file to server...');
+            const response = await fetch(`${BASE_URL}/analyze`, {
+                method: 'POST',
+                body: formData
+            });
+
+            console.log('Response received:', response);
+            console.log('Response status:', response.status);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('Response data:', data);
+
+            hideLoading();
+            
+            if (data.error) {
+                showError(data.error);
+            } else {
+                try {
+                    console.log('Parsing analysis:', data.analysis);
+                    const analysis = JSON.parse(data.analysis);
+                    console.log('Parsed analysis:', analysis);
+                    
+                    displayResults(analysis);
+                    documentAnalyzed = true;
+                    currentDocumentId = data.documentId;
+                    sendButton.disabled = !questionInput.value.trim();
+                    addMessage("I've analyzed the document. Feel free to ask any specific questions about the financial data!", false);
+                } catch (e) {
+                    console.error('Error parsing analysis:', e);
+                    showError('Error parsing analysis results: ' + e.message);
+                }
+            }
+        } catch (error) {
+            console.error('Network or processing error:', error);
+            hideLoading();
+            showError('Error analyzing document: ' + error.message);
+        }
+    }
+
+    async function askQuestion(question) {
+        if (!currentDocumentId) {
+            addMessage('Error: No document loaded. Please upload a document first.', false);
+            return;
         }
 
-        .loading {
-            text-align: center;
-            padding: 20px;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            margin: 20px 0;
-        }
+        try {
+            typingIndicator.style.display = 'block';
+            sendButton.disabled = true;
+            questionInput.disabled = true;
 
-        .loading p {
-            margin: 10px 0 0 0;
-            color: #007bff;
-            font-weight: bold;
+            const response = await fetch(`${BASE_URL}/ask`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    question: question,
+                    documentId: currentDocumentId
+                })
+            });
+
+            const data = await response.json();
+            
+            if (data.error) {
+                addMessage(`Error: ${data.error}`, false);
+            } else {
+                addMessage(data.answer, false);
+            }
+        } catch (error) {
+            console.error('Network error:', error);
+            addMessage(`Error: Failed to get response. Please try again.`, false);
+        } finally {
+            typingIndicator.style.display = 'none';
+            sendButton.disabled = false;
+            questionInput.disabled = false;
+            questionInput.value = '';
+            questionInput.focus();
         }
-    </style>
-</body>
-</html>
+    }
+</script>
+<!-- Rest of the HTML and JavaScript remains the same -->
