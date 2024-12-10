@@ -23,6 +23,7 @@ CORS(app)
 
 # Initialize Anthropic client with hardcoded API key
 client = anthropic.Anthropic(
+    # Using the newer API key format
     api_key="sk-ant-api03-6DhMEGAWyOxOHMXBK6-rrZOxOVoVDOE_CZH7kTHHAP0VwvQPLi5qSgEtcsJ_kxpGxQ-J-QLtgbOiGHjgvOSxQw-7s0GXQAA"
 )
 
@@ -36,25 +37,23 @@ def analyze_document():
         
     logger.info("Received analyze request")
     logger.info(f"Request headers: {dict(request.headers)}")
-    logger.info(f"Request files: {request.files}")
-    
-    if 'file' not in request.files:
-        logger.error("No file provided in request")
-        return jsonify({'error': 'No file provided'}), 400
-    
-    file = request.files['file']
-    logger.info(f"Received file: {file.filename}")
-    
-    if file.filename == '':
-        logger.error("No file selected")
-        return jsonify({'error': 'No file selected'}), 400
-    
-    if not file.filename.endswith('.pdf'):
-        logger.error("Invalid file type")
-        return jsonify({'error': 'File must be a PDF'}), 400
     
     try:
-        logger.info(f"Processing file: {file.filename}")
+        if 'file' not in request.files:
+            logger.error("No file provided in request")
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        logger.info(f"Received file: {file.filename}")
+        
+        if file.filename == '':
+            logger.error("No file selected")
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not file.filename.endswith('.pdf'):
+            logger.error("Invalid file type")
+            return jsonify({'error': 'File must be a PDF'}), 400
+        
         # Read the PDF file
         pdf_content = file.read()
         logger.info(f"Read {len(pdf_content)} bytes from file")
@@ -66,6 +65,11 @@ def analyze_document():
             for page in pdf_reader.pages:
                 text += page.extract_text()
             logger.info(f"Extracted {len(text)} characters from PDF")
+            
+            if len(text.strip()) == 0:
+                logger.error("No text extracted from PDF")
+                return jsonify({'error': 'Could not extract text from PDF'}), 400
+                
         except Exception as e:
             logger.error(f"Error extracting text from PDF: {str(e)}\n{traceback.format_exc()}")
             return jsonify({'error': 'Failed to read PDF file'}), 400
@@ -79,13 +83,12 @@ def analyze_document():
         try:
             logger.info("Sending text to Claude for analysis")
             message = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-3-sonnet-20240229",
                 max_tokens=4000,
                 temperature=0,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": f"""Analyze this financial document and provide:
+                messages=[{
+                    "role": "user",
+                    "content": f"""Analyze this financial document and provide:
 
 1. Key financial metrics:
    - Extract and verify all numerical values
@@ -139,8 +142,7 @@ Format the response in JSON with the following structure:
 
 Here's the document text:
 {text}"""
-                    }
-                ]
+                }]
             )
             
             logger.info("Received response from Claude")
@@ -201,21 +203,19 @@ def ask():
     try:
         logger.info("Sending question to Claude")
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-3-sonnet-20240229",
             max_tokens=4000,
             temperature=0,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"""Here is a financial document text for context:
+            messages=[{
+                "role": "user",
+                "content": f"""Here is a financial document text for context:
 
 {document_store[doc_id]}
 
 Answer this question about the document: {data['question']}
 
 Provide a clear, concise answer based on the financial data. If the information isn't available in the document, say so."""
-                }
-            ]
+            }]
         )
         logger.info("Received answer from Claude")
         return jsonify({'answer': message.content[0].text})
