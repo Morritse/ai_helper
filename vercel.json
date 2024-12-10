@@ -3,7 +3,10 @@
     "builds": [
         {
             "src": "app.py",
-            "use": "@vercel/python"
+            "use": "@vercel/python",
+            "config": {
+                "maxLambdaSize": "15mb"
+            }
         },
         {
             "src": "*.html",
@@ -22,12 +25,22 @@
         {
             "src": "/analyze",
             "methods": ["POST", "OPTIONS"],
-            "dest": "app.py"
+            "dest": "app.py",
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type"
+            }
         },
         {
             "src": "/ask",
             "methods": ["POST", "OPTIONS"],
-            "dest": "app.py"
+            "dest": "app.py",
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type"
+            }
         },
         {
             "src": "/",
@@ -37,5 +50,13 @@
             "src": "/(.*)",
             "dest": "/$1"
         }
-    ]
+    ],
+    "functions": {
+        "api/*.py": {
+            "maxDuration": 60
+        },
+        "app.py": {
+            "maxDuration": 60
+        }
+    }
 }
