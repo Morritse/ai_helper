@@ -21,10 +21,14 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, static_url_path='/static')
 CORS(app)
 
-# Initialize Anthropic client with hardcoded API key
-client = anthropic.Anthropic(
-    api_key="sk-ant-api03-6DhMEGAWyOxOHMXBK6-rrZOxOVoVDOE_CZH7kTHHAP0VwvQPLi5qSgEtcsJ_kxpGxQ-J-QLtgbOiGHjgvOSxQw-7s0GXQAA"
-)
+# Initialize Anthropic client with API key from environment variable
+api_key = os.getenv('ANTHROPIC_API_KEY')
+if not api_key:
+    logger.error("ANTHROPIC_API_KEY not found in environment variables")
+    raise ValueError("ANTHROPIC_API_KEY environment variable is required")
+
+client = anthropic.Anthropic(api_key=api_key)
+logger.info("Initialized Anthropic client")
 
 # In-memory document store
 document_store = {}
