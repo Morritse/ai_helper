@@ -1,0 +1,27 @@
+{
+    "id": "financial-default",
+    "name": "Financial Report Analysis",
+    "description": "Analyzes financial reports to extract key metrics and assess company health",
+    "metrics": [
+        "Revenue",
+        "Net Income",
+        "Operating Cash Flow",
+        "Total Assets",
+        "Liquidity Ratio",
+        "Profitability Ratio",
+        "Efficiency Ratio",
+        "Solvency Ratio"
+    ],
+    "visualization": {
+        "financial_health": {
+            "type": "radar",
+            "title": "Financial Health Indicators",
+            "fields": ["liquidity", "profitability", "efficiency", "solvency"]
+        },
+        "key_metrics": {
+            "type": "bar",
+            "title": "Key Financial Metrics",
+            "fields": ["revenue", "net_income", "operating_cash_flow", "total_assets"]
+        }
+    }
+}
