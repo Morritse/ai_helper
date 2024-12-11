@@ -25,23 +25,40 @@ claude = anthropic.Client(api_key=os.getenv('ANTHROPIC_API_KEY'))
 if not os.getenv('ANTHROPIC_API_KEY'):
     print("Warning: ANTHROPIC_API_KEY not set")
 
-# Load templates from config files
-def load_templates():
-    templates = []
-    template_dir = os.path.join('config', 'templates')
-    if os.path.exists(template_dir):
-        for filename in os.listdir(template_dir):
-            if filename.endswith('.json'):
-                with open(os.path.join(template_dir, filename)) as f:
-                    template = json.load(f)
-                    templates.append(template)
-    return templates
+# Default template
+DEFAULT_TEMPLATE = {
+    "id": "financial-default",
+    "name": "Financial Report Analysis",
+    "description": "Analyzes financial reports to extract key metrics and assess company health",
+    "metrics": [
+        "Revenue",
+        "Net Income",
+        "Operating Cash Flow",
+        "Total Assets",
+        "Liquidity Ratio",
+        "Profitability Ratio",
+        "Efficiency Ratio",
+        "Solvency Ratio"
+    ],
+    "visualization": {
+        "financial_health": {
+            "type": "radar",
+            "title": "Financial Health Indicators",
+            "fields": ["liquidity", "profitability", "efficiency", "solvency"]
+        },
+        "key_metrics": {
+            "type": "bar",
+            "title": "Key Financial Metrics",
+            "fields": ["revenue", "net_income", "operating_cash_flow", "total_assets"]
+        }
+    }
+}
 
 @app.route('/templates', methods=['GET'])
 def get_templates():
     try:
-        templates = load_templates()
-        return jsonify({'templates': templates})
+        # Return default template
+        return jsonify({'templates': [DEFAULT_TEMPLATE]})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -72,11 +89,6 @@ def create_template():
                 }
             }
         }
-        
-        # Save template
-        os.makedirs(os.path.join('config', 'templates'), exist_ok=True)
-        with open(os.path.join('config', 'templates', f'{template_id}.json'), 'w') as f:
-            json.dump(template, f, indent=2)
         
         return jsonify({
             'template_id': template_id,
@@ -159,7 +171,7 @@ def analyze_document():
         return jsonify({
             'documentId': document_id,
             'analysis': analysis,
-            'template': load_template_by_id(template_id)
+            'template': DEFAULT_TEMPLATE
         })
         
     except Exception as e:
@@ -218,13 +230,6 @@ def ask_question():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-def load_template_by_id(template_id):
-    template_path = os.path.join('config', 'templates', f'{template_id}.json')
-    if os.path.exists(template_path):
-        with open(template_path) as f:
-            return json.load(f)
-    return None
 
 if __name__ == '__main__':
     app.run(debug=True)
