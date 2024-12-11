@@ -33,12 +33,12 @@ logger.info("Initialized Anthropic client")
 # In-memory document store
 document_store = {}
 
-@app.route('/upload', methods=['POST', 'OPTIONS'])
-def upload_document():
+@app.route('/analyze', methods=['POST', 'OPTIONS'])
+def analyze_document():
     if request.method == 'OPTIONS':
         return '', 204
         
-    logger.info("Received upload request")
+    logger.info("Received analyze request")
     logger.info(f"Request headers: {dict(request.headers)}")
     
     try:
@@ -81,35 +81,6 @@ def upload_document():
         doc_id = str(hash(text))
         document_store[doc_id] = text
         logger.info(f"Stored document with ID: {doc_id}")
-        
-        return jsonify({
-            'documentId': doc_id,
-            'message': 'Document uploaded successfully'
-        })
-            
-    except Exception as e:
-        logger.error(f"Error processing document: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/analyze', methods=['POST', 'OPTIONS'])
-def analyze_document():
-    if request.method == 'OPTIONS':
-        return '', 204
-        
-    logger.info("Received analyze request")
-    
-    try:
-        data = request.get_json()
-        if not data or 'documentId' not in data:
-            logger.error("No document ID provided")
-            return jsonify({'error': 'No document ID provided'}), 400
-            
-        doc_id = data['documentId']
-        if doc_id not in document_store:
-            logger.error("Document not found")
-            return jsonify({'error': 'Document not found'}), 404
-            
-        text = document_store[doc_id]
         
         # Get analysis from Claude
         try:
@@ -192,7 +163,8 @@ Here's the document text:
                 logger.info("Successfully processed and validated JSON response")
                 
                 return jsonify({
-                    'analysis': json_str
+                    'analysis': json_str,
+                    'documentId': doc_id
                 })
             except Exception as e:
                 logger.error(f"Error processing Claude response: {str(e)}\n{traceback.format_exc()}")
@@ -203,7 +175,7 @@ Here's the document text:
             return jsonify({'error': 'Failed to analyze document'}), 500
             
     except Exception as e:
-        logger.error(f"Error processing request: {str(e)}\n{traceback.format_exc()}")
+        logger.error(f"Error processing document: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/ask', methods=['POST', 'OPTIONS'])

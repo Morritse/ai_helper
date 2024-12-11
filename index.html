@@ -20,13 +20,106 @@
 
         <div class="loading" id="loadingIndicator">
             <div class="spinner"></div>
-            <p>Processing document... Please wait...</p>
+            <p>Analyzing document... Please wait...</p>
         </div>
 
         <div class="error-message"></div>
 
         <div class="results-section">
-            <!-- Previous content remains the same -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <h3>Revenue</h3>
+                    <p id="revenue">-</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Net Income</h3>
+                    <p id="netIncome">-</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Total Assets</h3>
+                    <p id="totalAssets">-</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Total Liabilities</h3>
+                    <p id="totalLiabilities">-</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Cash Flow</h3>
+                    <p id="cashFlow">-</p>
+                </div>
+            </div>
+
+            <div class="charts-section">
+                <div class="chart-container">
+                    <canvas id="metricsChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="ratiosChart"></canvas>
+                </div>
+            </div>
+
+            <div class="credit-score-container">
+                <div class="credit-score">
+                    <h3>Credit Score</h3>
+                    <div class="score-display">
+                        <div id="scoreValue">-</div>
+                        <div class="score-scale">0-100</div>
+                    </div>
+                </div>
+                <div class="credit-interpretation">
+                    <h4>Score Interpretation</h4>
+                    <p>
+                        0-40: Poor financial health - High risk<br>
+                        41-60: Fair - Moderate risk<br>
+                        61-80: Good - Low risk<br>
+                        81-100: Excellent - Very low risk
+                    </p>
+                </div>
+            </div>
+
+            <div class="analysis-grid">
+                <div class="health-assessment">
+                    <h3>Financial Health Assessment</h3>
+                    <p id="healthAssessment">-</p>
+                </div>
+
+                <div class="ratios-grid">
+                    <div class="ratio-card">
+                        <h4>Debt to Equity</h4>
+                        <p id="debtToEquity">-</p>
+                    </div>
+                    <div class="ratio-card">
+                        <h4>Current Ratio</h4>
+                        <p id="currentRatio">-</p>
+                    </div>
+                    <div class="ratio-card">
+                        <h4>Quick Ratio</h4>
+                        <p id="quickRatio">-</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="analysis-grid">
+                <div class="risk-factors">
+                    <h3>Risk Factors</h3>
+                    <ul id="riskFactors"></ul>
+                </div>
+
+                <div class="recommendations">
+                    <h3>Recommendations</h3>
+                    <ul id="recommendations"></ul>
+                </div>
+            </div>
+
+            <div class="chat-section">
+                <h3>Ask Questions About the Document</h3>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="typing-indicator" id="typingIndicator">Insight is thinking...</div>
+                <div class="chat-input-container">
+                    <input type="text" id="questionInput" placeholder="Ask a question about the financial document..." />
+                    <button class="send-button" id="sendButton" disabled>Send</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -42,91 +135,104 @@
             const resultsSection = document.querySelector('.results-section');
             const errorMessage = document.querySelector('.error-message');
             const uploadSection = document.getElementById('uploadSection');
+            const questionInput = document.getElementById('questionInput');
+            const sendButton = document.getElementById('sendButton');
+            const chatMessages = document.getElementById('chatMessages');
+            const typingIndicator = document.getElementById('typingIndicator');
 
             console.log('DOM loaded, setting up event listeners');
 
-            async function handleFileUpload(file) {
-                console.log('Handling file upload:', file.name);
-                
-                if (!file.name.endsWith('.pdf')) {
-                    showError('Please select a PDF file');
-                    return;
-                }
+            function createCharts(data) {
+                // Destroy existing charts if they exist
+                if (metricsChart) metricsChart.destroy();
+                if (ratiosChart) ratiosChart.destroy();
 
-                const formData = new FormData();
-                formData.append('file', file);
-
-                showLoading(file, 'Uploading document...');
-
-                try {
-                    // Step 1: Upload the document
-                    console.log('Uploading document...');
-                    const uploadResponse = await fetch('/upload', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    if (!uploadResponse.ok) {
-                        throw new Error(`Upload failed: ${uploadResponse.status}`);
-                    }
-
-                    const uploadData = await uploadResponse.json();
-                    console.log('Upload response:', uploadData);
-
-                    if (uploadData.error) {
-                        throw new Error(uploadData.error);
-                    }
-
-                    // Step 2: Analyze the document
-                    showLoading(file, 'Analyzing document...');
-                    console.log('Analyzing document...');
-                    const analyzeResponse = await fetch('/analyze', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            documentId: uploadData.documentId
-                        })
-                    });
-
-                    if (!analyzeResponse.ok) {
-                        throw new Error(`Analysis failed: ${analyzeResponse.status}`);
-                    }
-
-                    const analysisData = await analyzeResponse.json();
-                    console.log('Analysis response:', analysisData);
-
-                    hideLoading();
-                    
-                    if (analysisData.error) {
-                        showError(analysisData.error);
-                    } else {
-                        try {
-                            console.log('Parsing analysis:', analysisData.analysis);
-                            const analysis = JSON.parse(analysisData.analysis);
-                            console.log('Parsed analysis:', analysis);
-                            
-                            displayResults(analysis);
-                            documentAnalyzed = true;
-                            currentDocumentId = uploadData.documentId;
-                            addMessage("I've analyzed the document. Feel free to ask any specific questions about the financial data!", false);
-                        } catch (e) {
-                            console.error('Error parsing analysis:', e);
-                            showError('Error parsing analysis results: ' + e.message);
+                // Create metrics chart
+                const metricsCtx = document.getElementById('metricsChart').getContext('2d');
+                metricsChart = new Chart(metricsCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Revenue', 'Net Income', 'Cash Flow'],
+                        datasets: [{
+                            label: 'Financial Metrics (in millions)',
+                            data: [
+                                data.metrics.revenue / 1000000,
+                                data.metrics.net_income / 1000000,
+                                data.metrics.cash_flow / 1000000
+                            ],
+                            backgroundColor: [
+                                'rgba(54, 162, 235, 0.5)',
+                                'rgba(75, 192, 192, 0.5)',
+                                'rgba(255, 159, 64, 0.5)'
+                            ],
+                            borderColor: [
+                                'rgba(54, 162, 235, 1)',
+                                'rgba(75, 192, 192, 1)',
+                                'rgba(255, 159, 64, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Key Financial Metrics'
+                            }
                         }
                     }
-                } catch (error) {
-                    console.error('Error:', error);
-                    hideLoading();
-                    showError(error.message);
-                }
+                });
+
+                // Create ratios chart
+                const ratiosCtx = document.getElementById('ratiosChart').getContext('2d');
+                ratiosChart = new Chart(ratiosCtx, {
+                    type: 'radar',
+                    data: {
+                        labels: ['Debt to Equity', 'Current Ratio', 'Quick Ratio'],
+                        datasets: [{
+                            label: 'Financial Ratios',
+                            data: [
+                                data.ratios.debt_to_equity,
+                                data.ratios.current_ratio,
+                                data.ratios.quick_ratio
+                            ],
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Financial Ratios Analysis'
+                            }
+                        }
+                    }
+                });
             }
 
-            function showLoading(file, message) {
-                console.log('Showing loading state:', message);
+            function formatCurrency(value) {
+                if (value === null || value === undefined) return 'Not Available';
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }).format(value);
+            }
+
+            function formatRatio(value) {
+                if (value === null || value === undefined) return 'Not Available';
+                return value.toFixed(2);
+            }
+
+            function showLoading(file) {
+                console.log('Showing loading state for:', file.name);
                 loadingDiv.style.display = 'block';
-                loadingDiv.querySelector('p').textContent = message;
+                loadingDiv.querySelector('p').textContent = `Analyzing ${file.name}... Please wait...`;
                 uploadSection.style.display = 'none';
                 resultsSection.style.display = 'none';
                 errorMessage.style.display = 'none';
@@ -144,7 +250,164 @@
                 errorMessage.style.display = 'block';
                 resultsSection.style.display = 'none';
                 documentAnalyzed = false;
+                sendButton.disabled = true;
                 currentDocumentId = null;
+            }
+
+            function displayResults(analysis) {
+                // Update metrics
+                document.getElementById('revenue').textContent = formatCurrency(analysis.metrics.revenue);
+                document.getElementById('netIncome').textContent = formatCurrency(analysis.metrics.net_income);
+                document.getElementById('totalAssets').textContent = formatCurrency(analysis.metrics.total_assets);
+                document.getElementById('totalLiabilities').textContent = formatCurrency(analysis.metrics.total_liabilities);
+                document.getElementById('cashFlow').textContent = formatCurrency(analysis.metrics.cash_flow);
+
+                // Update ratios
+                document.getElementById('debtToEquity').textContent = formatRatio(analysis.ratios.debt_to_equity);
+                document.getElementById('currentRatio').textContent = formatRatio(analysis.ratios.current_ratio);
+                document.getElementById('quickRatio').textContent = formatRatio(analysis.ratios.quick_ratio);
+
+                // Update health assessment
+                document.getElementById('healthAssessment').textContent = analysis.health_assessment;
+
+                // Update risk factors
+                const riskList = document.getElementById('riskFactors');
+                riskList.innerHTML = '';
+                analysis.risk_factors.forEach(risk => {
+                    const li = document.createElement('li');
+                    li.textContent = risk;
+                    riskList.appendChild(li);
+                });
+
+                // Update recommendations
+                const recList = document.getElementById('recommendations');
+                recList.innerHTML = '';
+                analysis.recommendations.forEach(rec => {
+                    const li = document.createElement('li');
+                    li.textContent = rec;
+                    recList.appendChild(li);
+                });
+
+                // Update credit score
+                document.getElementById('scoreValue').textContent = analysis.credit_score;
+
+                // Create charts
+                createCharts(analysis);
+
+                // Show results section
+                resultsSection.style.display = 'block';
+            }
+
+            function addMessage(content, isUser = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `chat-message ${isUser ? 'user-message' : 'assistant-message'}`;
+                messageDiv.textContent = content;
+
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'message-time';
+                timeDiv.textContent = new Date().toLocaleTimeString();
+                messageDiv.appendChild(timeDiv);
+
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            async function handleFileUpload(file) {
+                console.log('Handling file upload:', file.name);
+                
+                if (!file.name.endsWith('.pdf')) {
+                    showError('Please select a PDF file');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                showLoading(file);
+
+                try {
+                    console.log('Sending file to server...');
+                    const response = await fetch('/analyze', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    console.log('Response received:', response);
+                    console.log('Response status:', response.status);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('Response data:', data);
+
+                    hideLoading();
+                    
+                    if (data.error) {
+                        showError(data.error);
+                    } else {
+                        try {
+                            console.log('Parsing analysis:', data.analysis);
+                            const analysis = JSON.parse(data.analysis);
+                            console.log('Parsed analysis:', analysis);
+                            
+                            displayResults(analysis);
+                            documentAnalyzed = true;
+                            currentDocumentId = data.documentId;
+                            sendButton.disabled = !questionInput.value.trim();
+                            addMessage("I've analyzed the document. Feel free to ask any specific questions about the financial data!", false);
+                        } catch (e) {
+                            console.error('Error parsing analysis:', e);
+                            showError('Error parsing analysis results: ' + e.message);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Network or processing error:', error);
+                    hideLoading();
+                    showError('Error analyzing document: ' + error.message);
+                }
+            }
+
+            async function askQuestion(question) {
+                if (!currentDocumentId) {
+                    addMessage('Error: No document loaded. Please upload a document first.', false);
+                    return;
+                }
+
+                try {
+                    typingIndicator.style.display = 'block';
+                    sendButton.disabled = true;
+                    questionInput.disabled = true;
+
+                    const response = await fetch('/ask', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            question: question,
+                            documentId: currentDocumentId
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        addMessage(`Error: ${data.error}`, false);
+                    } else {
+                        addMessage(data.answer, false);
+                    }
+                } catch (error) {
+                    console.error('Network error:', error);
+                    addMessage(`Error: Failed to get response. Please try again.`, false);
+                } finally {
+                    typingIndicator.style.display = 'none';
+                    sendButton.disabled = false;
+                    questionInput.disabled = false;
+                    questionInput.value = '';
+                    questionInput.focus();
+                }
             }
 
             // File input change handler
@@ -184,6 +447,27 @@
                 if (files.length > 0) {
                     console.log('Dropped file:', files[0].name);
                     handleFileUpload(files[0]);
+                }
+            });
+
+            // Question input handlers
+            questionInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey && questionInput.value.trim() && documentAnalyzed) {
+                    const question = questionInput.value.trim();
+                    addMessage(question, true);
+                    askQuestion(question);
+                }
+            });
+
+            questionInput.addEventListener('input', () => {
+                sendButton.disabled = !questionInput.value.trim() || !documentAnalyzed;
+            });
+
+            sendButton.addEventListener('click', () => {
+                if (questionInput.value.trim() && documentAnalyzed) {
+                    const question = questionInput.value.trim();
+                    addMessage(question, true);
+                    askQuestion(question);
                 }
             });
         });
