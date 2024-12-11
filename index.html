@@ -3,14 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financial Document Analyzer</title>
+    <title>Document Analyzer</title>
     <link rel="stylesheet" href="/static/styles.css">
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>Financial Document Analyzer</h1>
+        <h1>Document Analyzer</h1>
+        
+        <div class="template-section">
+            <h2>Select Analysis Type</h2>
+            <select id="templateSelect">
+                <option value="">Loading templates...</option>
+            </select>
+            <p id="templateDescription"></p>
+        </div>
         
         <div class="upload-section" id="uploadSection">
             <input type="file" id="fileInput" accept=".pdf" />
@@ -26,110 +34,29 @@
         <div class="error-message"></div>
 
         <div class="results-section">
-            <div class="metrics-grid">
-                <div class="metric-card">
-                    <h3>Revenue</h3>
-                    <p id="revenue">-</p>
-                </div>
-                <div class="metric-card">
-                    <h3>Net Income</h3>
-                    <p id="netIncome">-</p>
-                </div>
-                <div class="metric-card">
-                    <h3>Total Assets</h3>
-                    <p id="totalAssets">-</p>
-                </div>
-                <div class="metric-card">
-                    <h3>Total Liabilities</h3>
-                    <p id="totalLiabilities">-</p>
-                </div>
-                <div class="metric-card">
-                    <h3>Cash Flow</h3>
-                    <p id="cashFlow">-</p>
-                </div>
-            </div>
+            <!-- Dynamic content will be inserted here based on template -->
+        </div>
 
-            <div class="charts-section">
-                <div class="chart-container">
-                    <canvas id="metricsChart"></canvas>
-                </div>
-                <div class="chart-container">
-                    <canvas id="ratiosChart"></canvas>
-                </div>
-            </div>
-
-            <div class="credit-score-container">
-                <div class="credit-score">
-                    <h3>Credit Score</h3>
-                    <div class="score-display">
-                        <div id="scoreValue">-</div>
-                        <div class="score-scale">0-100</div>
-                    </div>
-                </div>
-                <div class="credit-interpretation">
-                    <h4>Score Interpretation</h4>
-                    <p>
-                        0-40: Poor financial health - High risk<br>
-                        41-60: Fair - Moderate risk<br>
-                        61-80: Good - Low risk<br>
-                        81-100: Excellent - Very low risk
-                    </p>
-                </div>
-            </div>
-
-            <div class="analysis-grid">
-                <div class="health-assessment">
-                    <h3>Financial Health Assessment</h3>
-                    <p id="healthAssessment">-</p>
-                </div>
-
-                <div class="ratios-grid">
-                    <div class="ratio-card">
-                        <h4>Debt to Equity</h4>
-                        <p id="debtToEquity">-</p>
-                    </div>
-                    <div class="ratio-card">
-                        <h4>Current Ratio</h4>
-                        <p id="currentRatio">-</p>
-                    </div>
-                    <div class="ratio-card">
-                        <h4>Quick Ratio</h4>
-                        <p id="quickRatio">-</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="analysis-grid">
-                <div class="risk-factors">
-                    <h3>Risk Factors</h3>
-                    <ul id="riskFactors"></ul>
-                </div>
-
-                <div class="recommendations">
-                    <h3>Recommendations</h3>
-                    <ul id="recommendations"></ul>
-                </div>
-            </div>
-
-            <div class="chat-section">
-                <h3>Ask Questions About the Document</h3>
-                <div class="chat-messages" id="chatMessages"></div>
-                <div class="typing-indicator" id="typingIndicator">Insight is thinking...</div>
-                <div class="chat-input-container">
-                    <input type="text" id="questionInput" placeholder="Ask a question about the financial document..." />
-                    <button class="send-button" id="sendButton" disabled>Send</button>
-                </div>
+        <div class="chat-section">
+            <h3>Ask Questions About the Document</h3>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="typing-indicator" id="typingIndicator">AI is thinking...</div>
+            <div class="chat-input-container">
+                <input type="text" id="questionInput" placeholder="Ask a question about the document..." />
+                <button class="send-button" id="sendButton" disabled>Send</button>
             </div>
         </div>
     </div>
 
     <script>
-        let metricsChart = null;
-        let ratiosChart = null;
+        let charts = {};
         let documentAnalyzed = false;
         let currentDocumentId = null;
+        let currentTemplate = null;
 
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
+            const templateSelect = document.getElementById('templateSelect');
+            const templateDescription = document.getElementById('templateDescription');
             const fileInput = document.getElementById('fileInput');
             const loadingDiv = document.getElementById('loadingIndicator');
             const resultsSection = document.querySelector('.results-section');
@@ -140,176 +67,134 @@
             const chatMessages = document.getElementById('chatMessages');
             const typingIndicator = document.getElementById('typingIndicator');
 
-            console.log('DOM loaded, setting up event listeners');
+            console.log('DOM loaded, loading templates...');
 
-            function createCharts(data) {
-                // Destroy existing charts if they exist
-                if (metricsChart) metricsChart.destroy();
-                if (ratiosChart) ratiosChart.destroy();
-
-                // Create metrics chart
-                const metricsCtx = document.getElementById('metricsChart').getContext('2d');
-                metricsChart = new Chart(metricsCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: ['Revenue', 'Net Income', 'Cash Flow'],
-                        datasets: [{
-                            label: 'Financial Metrics (in millions)',
-                            data: [
-                                data.metrics.revenue / 1000000,
-                                data.metrics.net_income / 1000000,
-                                data.metrics.cash_flow / 1000000
-                            ],
-                            backgroundColor: [
-                                'rgba(54, 162, 235, 0.5)',
-                                'rgba(75, 192, 192, 0.5)',
-                                'rgba(255, 159, 64, 0.5)'
-                            ],
-                            borderColor: [
-                                'rgba(54, 162, 235, 1)',
-                                'rgba(75, 192, 192, 1)',
-                                'rgba(255, 159, 64, 1)'
-                            ],
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: 'Key Financial Metrics'
-                            }
-                        }
+            // Load available templates
+            try {
+                const response = await fetch('/templates');
+                const data = await response.json();
+                
+                templateSelect.innerHTML = data.templates.map(template => 
+                    `<option value="${template.id}">${template.name}</option>`
+                ).join('');
+                
+                templateSelect.addEventListener('change', function() {
+                    const selectedTemplate = data.templates.find(t => t.id === this.value);
+                    if (selectedTemplate) {
+                        templateDescription.textContent = selectedTemplate.description;
                     }
                 });
+                
+                // Trigger initial description
+                templateSelect.dispatchEvent(new Event('change'));
+                
+            } catch (error) {
+                console.error('Error loading templates:', error);
+                templateSelect.innerHTML = '<option value="">Error loading templates</option>';
+            }
 
-                // Create ratios chart
-                const ratiosCtx = document.getElementById('ratiosChart').getContext('2d');
-                ratiosChart = new Chart(ratiosCtx, {
-                    type: 'radar',
-                    data: {
-                        labels: ['Debt to Equity', 'Current Ratio', 'Quick Ratio'],
-                        datasets: [{
-                            label: 'Financial Ratios',
-                            data: [
-                                data.ratios.debt_to_equity,
-                                data.ratios.current_ratio,
-                                data.ratios.quick_ratio
-                            ],
-                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: 'Financial Ratios Analysis'
+            function createVisualization(type, config, data, container) {
+                const canvas = document.createElement('canvas');
+                container.appendChild(canvas);
+                const ctx = canvas.getContext('2d');
+
+                switch (type) {
+                    case 'bar':
+                        return new Chart(ctx, {
+                            type: 'bar',
+                            data: {
+                                labels: config.fields,
+                                datasets: [{
+                                    label: config.title,
+                                    data: config.fields.map(field => data[field]),
+                                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                                    borderColor: 'rgba(54, 162, 235, 1)',
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: config.title
+                                    }
+                                }
                             }
-                        }
+                        });
+
+                    case 'radar':
+                        return new Chart(ctx, {
+                            type: 'radar',
+                            data: {
+                                labels: config.fields,
+                                datasets: [{
+                                    label: config.title,
+                                    data: config.fields.map(field => data[field]),
+                                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                                    borderColor: 'rgba(54, 162, 235, 1)',
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: config.title
+                                    }
+                                }
+                            }
+                        });
+
+                    case 'gauge':
+                        // Custom gauge visualization
+                        const value = data[config.field];
+                        const gaugeDiv = document.createElement('div');
+                        gaugeDiv.className = 'gauge';
+                        gaugeDiv.innerHTML = `
+                            <h3>${config.title}</h3>
+                            <div class="gauge-value">${value}</div>
+                            <div class="gauge-range">${config.min} - ${config.max}</div>
+                        `;
+                        container.appendChild(gaugeDiv);
+                        return gaugeDiv;
+
+                    default:
+                        console.warn(`Unsupported visualization type: ${type}`);
+                        return null;
+                }
+            }
+
+            function displayResults(analysis, template) {
+                // Clear previous results
+                resultsSection.innerHTML = '';
+                Object.values(charts).forEach(chart => {
+                    if (chart instanceof Chart) {
+                        chart.destroy();
                     }
                 });
-            }
+                charts = {};
 
-            function formatCurrency(value) {
-                if (value === null || value === undefined) return 'Not Available';
-                return new Intl.NumberFormat('en-US', {
-                    style: 'currency',
-                    currency: 'USD',
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0
-                }).format(value);
-            }
+                // Create visualizations based on template
+                Object.entries(template.visualization).forEach(([key, config]) => {
+                    const section = document.createElement('div');
+                    section.className = 'visualization-section';
+                    resultsSection.appendChild(section);
 
-            function formatRatio(value) {
-                if (value === null || value === undefined) return 'Not Available';
-                return value.toFixed(2);
-            }
-
-            function showLoading(file) {
-                console.log('Showing loading state for:', file.name);
-                loadingDiv.style.display = 'block';
-                loadingDiv.querySelector('p').textContent = `Analyzing ${file.name}... Please wait...`;
-                uploadSection.style.display = 'none';
-                resultsSection.style.display = 'none';
-                errorMessage.style.display = 'none';
-            }
-
-            function hideLoading() {
-                console.log('Hiding loading state');
-                loadingDiv.style.display = 'none';
-                uploadSection.style.display = 'block';
-            }
-
-            function showError(message) {
-                console.error('Showing error:', message);
-                errorMessage.textContent = message;
-                errorMessage.style.display = 'block';
-                resultsSection.style.display = 'none';
-                documentAnalyzed = false;
-                sendButton.disabled = true;
-                currentDocumentId = null;
-            }
-
-            function displayResults(analysis) {
-                // Update metrics
-                document.getElementById('revenue').textContent = formatCurrency(analysis.metrics.revenue);
-                document.getElementById('netIncome').textContent = formatCurrency(analysis.metrics.net_income);
-                document.getElementById('totalAssets').textContent = formatCurrency(analysis.metrics.total_assets);
-                document.getElementById('totalLiabilities').textContent = formatCurrency(analysis.metrics.total_liabilities);
-                document.getElementById('cashFlow').textContent = formatCurrency(analysis.metrics.cash_flow);
-
-                // Update ratios
-                document.getElementById('debtToEquity').textContent = formatRatio(analysis.ratios.debt_to_equity);
-                document.getElementById('currentRatio').textContent = formatRatio(analysis.ratios.current_ratio);
-                document.getElementById('quickRatio').textContent = formatRatio(analysis.ratios.quick_ratio);
-
-                // Update health assessment
-                document.getElementById('healthAssessment').textContent = analysis.health_assessment;
-
-                // Update risk factors
-                const riskList = document.getElementById('riskFactors');
-                riskList.innerHTML = '';
-                analysis.risk_factors.forEach(risk => {
-                    const li = document.createElement('li');
-                    li.textContent = risk;
-                    riskList.appendChild(li);
+                    const chart = createVisualization(
+                        config.type,
+                        config,
+                        analysis,
+                        section
+                    );
+                    if (chart) {
+                        charts[key] = chart;
+                    }
                 });
-
-                // Update recommendations
-                const recList = document.getElementById('recommendations');
-                recList.innerHTML = '';
-                analysis.recommendations.forEach(rec => {
-                    const li = document.createElement('li');
-                    li.textContent = rec;
-                    recList.appendChild(li);
-                });
-
-                // Update credit score
-                document.getElementById('scoreValue').textContent = analysis.credit_score;
-
-                // Create charts
-                createCharts(analysis);
 
                 // Show results section
                 resultsSection.style.display = 'block';
-            }
-
-            function addMessage(content, isUser = false) {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `chat-message ${isUser ? 'user-message' : 'assistant-message'}`;
-                messageDiv.textContent = content;
-
-                const timeDiv = document.createElement('div');
-                timeDiv.className = 'message-time';
-                timeDiv.textContent = new Date().toLocaleTimeString();
-                messageDiv.appendChild(timeDiv);
-
-                chatMessages.appendChild(messageDiv);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
             }
 
             async function handleFileUpload(file) {
@@ -322,6 +207,7 @@
 
                 const formData = new FormData();
                 formData.append('file', file);
+                formData.append('template', templateSelect.value);
 
                 showLoading(file);
 
@@ -352,11 +238,12 @@
                             const analysis = JSON.parse(data.analysis);
                             console.log('Parsed analysis:', analysis);
                             
-                            displayResults(analysis);
+                            displayResults(analysis, data.template);
                             documentAnalyzed = true;
                             currentDocumentId = data.documentId;
+                            currentTemplate = data.template;
                             sendButton.disabled = !questionInput.value.trim();
-                            addMessage("I've analyzed the document. Feel free to ask any specific questions about the financial data!", false);
+                            addMessage("I've analyzed the document. Feel free to ask any specific questions!", false);
                         } catch (e) {
                             console.error('Error parsing analysis:', e);
                             showError('Error parsing analysis results: ' + e.message);
@@ -367,6 +254,45 @@
                     hideLoading();
                     showError('Error analyzing document: ' + error.message);
                 }
+            }
+
+            function showLoading(file) {
+                console.log('Showing loading state for:', file.name);
+                loadingDiv.style.display = 'block';
+                loadingDiv.querySelector('p').textContent = `Analyzing ${file.name}... Please wait...`;
+                uploadSection.style.display = 'none';
+                resultsSection.style.display = 'none';
+                errorMessage.style.display = 'none';
+            }
+
+            function hideLoading() {
+                console.log('Hiding loading state');
+                loadingDiv.style.display = 'none';
+                uploadSection.style.display = 'block';
+            }
+
+            function showError(message) {
+                console.error('Showing error:', message);
+                errorMessage.textContent = message;
+                errorMessage.style.display = 'block';
+                resultsSection.style.display = 'none';
+                documentAnalyzed = false;
+                sendButton.disabled = true;
+                currentDocumentId = null;
+            }
+
+            function addMessage(content, isUser = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `chat-message ${isUser ? 'user-message' : 'assistant-message'}`;
+                messageDiv.textContent = content;
+
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'message-time';
+                timeDiv.textContent = new Date().toLocaleTimeString();
+                messageDiv.appendChild(timeDiv);
+
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
             }
 
             async function askQuestion(question) {
@@ -474,6 +400,50 @@
     </script>
 
     <style>
+        .template-section {
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .template-section select {
+            width: 100%;
+            padding: 0.5rem;
+            margin-bottom: 1rem;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+
+        .template-section p {
+            margin: 0;
+            color: #6c757d;
+        }
+
+        .visualization-section {
+            margin: 2rem 0;
+            padding: 1rem;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .gauge {
+            text-align: center;
+            padding: 1rem;
+        }
+
+        .gauge-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .gauge-range {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
         .spinner {
             width: 40px;
             height: 40px;

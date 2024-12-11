@@ -9,6 +9,7 @@ import re
 import logging
 import sys
 import traceback
+import glob
 
 # Configure logging
 logging.basicConfig(
@@ -30,8 +31,34 @@ if not api_key:
 client = anthropic.Anthropic(api_key=api_key)
 logger.info("Initialized Anthropic client")
 
+# Load analysis templates
+templates = {}
+template_dir = 'config/templates'
+for template_file in glob.glob(f'{template_dir}/*.json'):
+    try:
+        with open(template_file, 'r') as f:
+            template_name = os.path.splitext(os.path.basename(template_file))[0]
+            templates[template_name] = json.load(f)
+            logger.info(f"Loaded template: {template_name}")
+    except Exception as e:
+        logger.error(f"Error loading template {template_file}: {str(e)}")
+
 # In-memory document store
 document_store = {}
+
+@app.route('/templates', methods=['GET'])
+def list_templates():
+    """List available analysis templates"""
+    return jsonify({
+        'templates': [
+            {
+                'id': template_id,
+                'name': template['name'],
+                'description': template['description']
+            }
+            for template_id, template in templates.items()
+        ]
+    })
 
 @app.route('/analyze', methods=['POST', 'OPTIONS'])
 def analyze_document():
@@ -45,6 +72,14 @@ def analyze_document():
         if 'file' not in request.files:
             logger.error("No file provided in request")
             return jsonify({'error': 'No file provided'}), 400
+            
+        template_id = request.form.get('template', 'financial')  # Default to financial template
+        if template_id not in templates:
+            logger.error(f"Invalid template: {template_id}")
+            return jsonify({'error': 'Invalid template'}), 400
+            
+        template = templates[template_id]
+        logger.info(f"Using template: {template_id}")
         
         file = request.files['file']
         logger.info(f"Received file: {file.filename}")
@@ -79,7 +114,10 @@ def analyze_document():
         
         # Generate document ID and store text
         doc_id = str(hash(text))
-        document_store[doc_id] = text
+        document_store[doc_id] = {
+            'text': text,
+            'template_id': template_id
+        }
         logger.info(f"Stored document with ID: {doc_id}")
         
         # Get analysis from Claude
@@ -91,60 +129,7 @@ def analyze_document():
                 temperature=0,
                 messages=[{
                     "role": "user",
-                    "content": f"""Analyze this financial document and provide:
-
-1. Key financial metrics:
-   - Extract and verify all numerical values
-   - Convert text-based numbers to numerical format
-   - Identify and standardize units (thousands, millions, etc.)
-
-2. Financial health assessment:
-   - Analyze current financial position
-   - Compare against industry standards
-   - Identify trends and patterns
-   - Evaluate operational efficiency
-
-3. Risk assessment:
-   - Identify potential red flags
-   - Analyze debt structure and obligations
-   - Evaluate market and industry risks
-   - Consider regulatory compliance issues
-
-4. Strategic recommendations:
-   - Provide actionable insights
-   - Suggest areas for improvement
-   - Recommend risk mitigation strategies
-   - Outline potential growth opportunities
-
-5. Creditworthiness evaluation:
-   - Calculate key financial ratios
-   - Compare to industry benchmarks
-   - Consider qualitative factors
-   - Provide a score from 0-100 with detailed justification
-
-Format the response in JSON with the following structure:
-{{
-    "metrics": {{
-        "revenue": number or null,
-        "net_income": number or null,
-        "total_assets": number or null,
-        "total_liabilities": number or null,
-        "cash_flow": number or null
-    }},
-    "health_assessment": "detailed assessment string",
-    "risk_factors": ["list", "of", "risk", "factors"],
-    "recommendations": ["list", "of", "recommendations"],
-    "credit_score": number,
-    "ratios": {{
-        "debt_to_equity": number or null,
-        "current_ratio": number or null,
-        "quick_ratio": number or null
-    }},
-    "analysis_confidence": number
-}}
-
-Here's the document text:
-{text}"""
+                    "content": f"{template['prompt_template']}\n\nHere's the document text:\n{text}"
                 }]
             )
             
@@ -159,12 +144,16 @@ Here's the document text:
                 json_str = re.sub(r',(\s*[\]}])', r'\1', json_str)
                 
                 # Validate JSON
-                json.loads(json_str)
+                analysis = json.loads(json_str)
                 logger.info("Successfully processed and validated JSON response")
                 
                 return jsonify({
                     'analysis': json_str,
-                    'documentId': doc_id
+                    'documentId': doc_id,
+                    'template': {
+                        'id': template_id,
+                        'visualization': template['visualization']
+                    }
                 })
             except Exception as e:
                 logger.error(f"Error processing Claude response: {str(e)}\n{traceback.format_exc()}")
@@ -211,13 +200,13 @@ def ask():
             temperature=0,
             messages=[{
                 "role": "user",
-                "content": f"""Here is a financial document text for context:
+                "content": f"""Here is a document text for context:
 
-{document_store[doc_id]}
+{document_store[doc_id]['text']}
 
 Answer this question about the document: {data['question']}
 
-Provide a clear, concise answer based on the financial data. If the information isn't available in the document, say so."""
+Provide a clear, concise answer based on the document content. If the information isn't available in the document, say so."""
             }]
         )
         logger.info("Received answer from Claude")

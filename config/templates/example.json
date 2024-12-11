@@ -1,0 +1,22 @@
+{
+    "name": "Example Analysis",
+    "description": "Example template showing how to structure analysis instructions",
+
+    "prompt_template": "Analyze this document and provide:\n\n1. Section One Title:\n   - First instruction point\n   - Second instruction point\n   - Third instruction point\n\n2. Section Two Title:\n   - Another instruction point\n   - More specific guidance\n   - What you want Claude to look for\n\n3. Section Three Title:\n   - Be specific about what to extract\n   - How to format numbers\n   - What patterns to identify\n\nFormat the response in JSON with the following structure:\n{\n    \"section_one\": {\n        \"field1\": \"number or text\",\n        \"field2\": \"number or text\",\n        \"field3\": [\"list\", \"of\", \"items\"]\n    },\n    \"section_two\": {\n        \"metric1\": \"number\",\n        \"metric2\": \"number\",\n        \"description\": \"text explanation\"\n    },\n    \"section_three\": {\n        \"score\": \"number 0-100\",\n        \"findings\": [\"list\", \"of\", \"findings\"],\n        \"details\": \"text explanation\"\n    }\n}",
+
+    "visualization": {
+        "metrics": {
+            "type": "bar",
+            "fields": ["section_two.metric1", "section_two.metric2"],
+            "title": "Key Metrics",
+            "unit": "units"
+        },
+        "score": {
+            "type": "gauge",
+            "field": "section_three.score",
+            "title": "Overall Score",
+            "min": 0,
+            "max": 100
+        }
+    }
+}
