@@ -28,8 +28,12 @@
             "dest": "/builder.html"
         },
         {
+            "src": "/",
+            "dest": "/index.html"
+        },
+        {
             "src": "/(.*)",
-            "dest": "app.py"
+            "dest": "/app.py"
         }
     ]
 }
