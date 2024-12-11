@@ -20,7 +20,7 @@
 
         <div class="loading" id="loadingIndicator">
             <div class="spinner"></div>
-            <p>Analyzing document... Please wait...</p>
+            <p>Processing document... Please wait...</p>
         </div>
 
         <div class="error-message"></div>
@@ -31,10 +31,6 @@
     </div>
 
     <script>
-        // Get the current URL for API calls
-        const BASE_URL = window.location.origin;
-        console.log('Base URL:', BASE_URL);
-
         let metricsChart = null;
         let ratiosChart = null;
         let documentAnalyzed = false;
@@ -46,12 +42,110 @@
             const resultsSection = document.querySelector('.results-section');
             const errorMessage = document.querySelector('.error-message');
             const uploadSection = document.getElementById('uploadSection');
-            const questionInput = document.getElementById('questionInput');
-            const sendButton = document.getElementById('sendButton');
-            const chatMessages = document.getElementById('chatMessages');
-            const typingIndicator = document.getElementById('typingIndicator');
 
             console.log('DOM loaded, setting up event listeners');
+
+            async function handleFileUpload(file) {
+                console.log('Handling file upload:', file.name);
+                
+                if (!file.name.endsWith('.pdf')) {
+                    showError('Please select a PDF file');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                showLoading(file, 'Uploading document...');
+
+                try {
+                    // Step 1: Upload the document
+                    console.log('Uploading document...');
+                    const uploadResponse = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!uploadResponse.ok) {
+                        throw new Error(`Upload failed: ${uploadResponse.status}`);
+                    }
+
+                    const uploadData = await uploadResponse.json();
+                    console.log('Upload response:', uploadData);
+
+                    if (uploadData.error) {
+                        throw new Error(uploadData.error);
+                    }
+
+                    // Step 2: Analyze the document
+                    showLoading(file, 'Analyzing document...');
+                    console.log('Analyzing document...');
+                    const analyzeResponse = await fetch('/analyze', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            documentId: uploadData.documentId
+                        })
+                    });
+
+                    if (!analyzeResponse.ok) {
+                        throw new Error(`Analysis failed: ${analyzeResponse.status}`);
+                    }
+
+                    const analysisData = await analyzeResponse.json();
+                    console.log('Analysis response:', analysisData);
+
+                    hideLoading();
+                    
+                    if (analysisData.error) {
+                        showError(analysisData.error);
+                    } else {
+                        try {
+                            console.log('Parsing analysis:', analysisData.analysis);
+                            const analysis = JSON.parse(analysisData.analysis);
+                            console.log('Parsed analysis:', analysis);
+                            
+                            displayResults(analysis);
+                            documentAnalyzed = true;
+                            currentDocumentId = uploadData.documentId;
+                            addMessage("I've analyzed the document. Feel free to ask any specific questions about the financial data!", false);
+                        } catch (e) {
+                            console.error('Error parsing analysis:', e);
+                            showError('Error parsing analysis results: ' + e.message);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    hideLoading();
+                    showError(error.message);
+                }
+            }
+
+            function showLoading(file, message) {
+                console.log('Showing loading state:', message);
+                loadingDiv.style.display = 'block';
+                loadingDiv.querySelector('p').textContent = message;
+                uploadSection.style.display = 'none';
+                resultsSection.style.display = 'none';
+                errorMessage.style.display = 'none';
+            }
+
+            function hideLoading() {
+                console.log('Hiding loading state');
+                loadingDiv.style.display = 'none';
+                uploadSection.style.display = 'block';
+            }
+
+            function showError(message) {
+                console.error('Showing error:', message);
+                errorMessage.textContent = message;
+                errorMessage.style.display = 'block';
+                resultsSection.style.display = 'none';
+                documentAnalyzed = false;
+                currentDocumentId = null;
+            }
 
             // File input change handler
             fileInput.addEventListener('change', (e) => {
@@ -92,92 +186,49 @@
                     handleFileUpload(files[0]);
                 }
             });
-
-            async function handleFileUpload(file) {
-                console.log('Handling file upload:', file.name);
-                
-                if (!file.name.endsWith('.pdf')) {
-                    showError('Please select a PDF file');
-                    return;
-                }
-
-                const formData = new FormData();
-                formData.append('file', file);
-
-                showLoading(file);
-
-                try {
-                    const url = `${BASE_URL}/analyze`;
-                    console.log('Sending file to server:', url);
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    console.log('Response received:', response);
-                    console.log('Response status:', response.status);
-                    
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    
-                    const data = await response.json();
-                    console.log('Response data:', data);
-
-                    hideLoading();
-                    
-                    if (data.error) {
-                        showError(data.error);
-                    } else {
-                        try {
-                            console.log('Parsing analysis:', data.analysis);
-                            const analysis = JSON.parse(data.analysis);
-                            console.log('Parsed analysis:', analysis);
-                            
-                            displayResults(analysis);
-                            documentAnalyzed = true;
-                            currentDocumentId = data.documentId;
-                            sendButton.disabled = !questionInput.value.trim();
-                            addMessage("I've analyzed the document. Feel free to ask any specific questions about the financial data!", false);
-                        } catch (e) {
-                            console.error('Error parsing analysis:', e);
-                            showError('Error parsing analysis results: ' + e.message);
-                        }
-                    }
-                } catch (error) {
-                    console.error('Network or processing error:', error);
-                    hideLoading();
-                    showError('Error analyzing document: ' + error.message);
-                }
-            }
-
-            function showLoading(file) {
-                console.log('Showing loading state for:', file.name);
-                loadingDiv.style.display = 'block';
-                loadingDiv.querySelector('p').textContent = `Analyzing ${file.name}... Please wait...`;
-                uploadSection.style.display = 'none';
-                resultsSection.style.display = 'none';
-                errorMessage.style.display = 'none';
-            }
-
-            function hideLoading() {
-                console.log('Hiding loading state');
-                loadingDiv.style.display = 'none';
-                uploadSection.style.display = 'block';
-            }
-
-            function showError(message) {
-                console.error('Showing error:', message);
-                errorMessage.textContent = message;
-                errorMessage.style.display = 'block';
-                resultsSection.style.display = 'none';
-                documentAnalyzed = false;
-                sendButton.disabled = true;
-                currentDocumentId = null;
-            }
-
-            // Rest of your JavaScript code...
         });
     </script>
+
+    <style>
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin: 20px 0;
+        }
+
+        .loading p {
+            margin: 10px 0 0 0;
+            color: #007bff;
+            font-weight: bold;
+        }
+
+        .error-message {
+            display: none;
+            color: #dc3545;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #dc3545;
+            border-radius: 4px;
+            background-color: #f8d7da;
+        }
+    </style>
 </body>
 </html>
