@@ -24,8 +24,24 @@
             "dest": "/static/$1"
         },
         {
-            "src": "/builder",
-            "dest": "/builder.html"
+            "src": "/analyze",
+            "methods": ["POST", "OPTIONS"],
+            "dest": "app.py"
+        },
+        {
+            "src": "/templates",
+            "methods": ["GET"],
+            "dest": "app.py"
+        },
+        {
+            "src": "/create_template",
+            "methods": ["POST", "OPTIONS"],
+            "dest": "app.py"
+        },
+        {
+            "src": "/ask",
+            "methods": ["POST", "OPTIONS"],
+            "dest": "app.py"
         },
         {
             "src": "/",
@@ -33,7 +49,7 @@
         },
         {
             "src": "/(.*)",
-            "dest": "/app.py"
+            "dest": "/$1"
         }
     ]
 }

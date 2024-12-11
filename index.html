@@ -1,519 +1,323 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document Analyzer</title>
-    <link rel="stylesheet" href="/static/styles.css">
-    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-    <div class="container">
-        <h1>Document Analyzer</h1>
-        
-        <div class="template-section">
-            <div class="template-header">
-                <h2>Select Analysis Type</h2>
-                <button onclick="showTemplateBuilder()" class="create-template-button">Create Custom Template</button>
-            </div>
-            <select id="templateSelect" onchange="updateTemplateDescription()">
-                <option value="">Loading templates...</option>
-            </select>
-            <p id="templateDescription" class="template-description"></p>
-        </div>
-        
-        <div class="upload-section" id="uploadSection">
-            <input type="file" id="fileInput" accept=".pdf" />
-            <button onclick="document.getElementById('fileInput').click()">Select PDF Document</button>
-            <p>Drop PDF file here or click to select</p>
-        </div>
+<!-- Previous HTML remains the same until the style section -->
 
-        <div class="loading" id="loadingIndicator">
-            <div class="spinner"></div>
-            <p>Analyzing document... Please wait...</p>
-        </div>
+<style>
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
 
-        <div class="error-message"></div>
+    .template-section {
+        margin-bottom: 2rem;
+        padding: 1.5rem;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
 
-        <div class="results-section">
-            <!-- Dynamic content will be inserted here based on template -->
-        </div>
+    .template-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
 
-        <div class="chat-section">
-            <h3>Ask Questions About the Document</h3>
-            <div class="chat-messages" id="chatMessages"></div>
-            <div class="typing-indicator" id="typingIndicator">AI is thinking...</div>
-            <div class="chat-input-container">
-                <input type="text" id="questionInput" placeholder="Ask a question about the document..." />
-                <button class="send-button" id="sendButton" disabled>Send</button>
-            </div>
-        </div>
-    </div>
+    .create-template-button {
+        background-color: #28a745;
+        color: white;
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
 
-    <!-- Template Builder Modal -->
-    <div id="templateBuilderModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Create Custom Template</h2>
-                <span class="close" onclick="hideTemplateBuilder()">&times;</span>
-            </div>
-            <div class="modal-body">
-                <form id="templateForm" onsubmit="createTemplate(event)">
-                    <div class="form-group">
-                        <label for="templateName">Template Name</label>
-                        <input type="text" id="templateName" required placeholder="e.g., Medical Research Analysis">
-                    </div>
+    .create-template-button:hover {
+        background-color: #218838;
+    }
 
-                    <div class="form-group">
-                        <label for="description">Document Description</label>
-                        <textarea 
-                            id="description" 
-                            required
-                            rows="3" 
-                            placeholder="Describe the type of document you want to analyze..."
-                        ></textarea>
-                    </div>
+    .upload-section {
+        border: 2px dashed #ccc;
+        padding: 2rem;
+        text-align: center;
+        margin: 2rem 0;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+        transition: border-color 0.3s;
+    }
 
-                    <div class="form-group">
-                        <label for="metrics">Metrics to Extract</label>
-                        <textarea 
-                            id="metrics" 
-                            required
-                            rows="4" 
-                            placeholder="List the specific information you want to extract..."
-                        ></textarea>
-                    </div>
+    .upload-section:hover {
+        border-color: #007bff;
+    }
 
-                    <div class="form-group">
-                        <label for="visualizations">Desired Visualizations</label>
-                        <textarea 
-                            id="visualizations" 
-                            required
-                            rows="4" 
-                            placeholder="Describe how you want to visualize the data..."
-                        ></textarea>
-                    </div>
+    .upload-section input[type="file"] {
+        display: none;
+    }
 
-                    <div class="form-actions">
-                        <button type="submit" class="create-button">Create Template</button>
-                        <button type="button" class="cancel-button" onclick="hideTemplateBuilder()">Cancel</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+    .upload-section button {
+        background-color: #007bff;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+        transition: background-color 0.2s;
+    }
 
-    <script>
-        let templates = {};
-        let currentTemplate = null;
-        let documentAnalyzed = false;
-        let currentDocumentId = null;
+    .upload-section button:hover {
+        background-color: #0056b3;
+    }
 
-        // Load templates when page loads
-        window.addEventListener('DOMContentLoaded', loadTemplates);
+    .loading {
+        display: none;
+        text-align: center;
+        padding: 2rem;
+    }
 
-        async function loadTemplates() {
-            try {
-                const response = await fetch('/templates');
-                const data = await response.json();
-                
-                // Store templates
-                templates = data.templates.reduce((acc, template) => {
-                    acc[template.id] = template;
-                    return acc;
-                }, {});
-                
-                // Update dropdown
-                updateTemplateSelect();
-                
-            } catch (error) {
-                console.error('Error loading templates:', error);
-                document.getElementById('templateSelect').innerHTML = 
-                    '<option value="">Error loading templates</option>';
-            }
-        }
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 1rem;
+    }
 
-        function updateTemplateSelect() {
-            const select = document.getElementById('templateSelect');
-            select.innerHTML = `
-                <option value="">Select a template...</option>
-                ${Object.values(templates).map(template => 
-                    `<option value="${template.id}">${template.name}</option>`
-                ).join('')}
-            `;
-            updateTemplateDescription();
-        }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
 
-        function updateTemplateDescription() {
-            const select = document.getElementById('templateSelect');
-            const description = document.getElementById('templateDescription');
-            const selectedTemplate = templates[select.value];
-            
-            if (selectedTemplate) {
-                description.textContent = selectedTemplate.description;
-                description.style.display = 'block';
-            } else {
-                description.textContent = 'Please select a template';
-                description.style.display = 'block';
-            }
-        }
+    .error-message {
+        display: none;
+        color: #dc3545;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 4px;
+        text-align: center;
+    }
 
-        function showTemplateBuilder() {
-            document.getElementById('templateBuilderModal').style.display = 'block';
-        }
+    .success-message {
+        color: #28a745;
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 4px;
+        text-align: center;
+    }
 
-        function hideTemplateBuilder() {
-            document.getElementById('templateBuilderModal').style.display = 'none';
-            document.getElementById('templateForm').reset();
-        }
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+    }
 
-        async function createTemplate(event) {
-            event.preventDefault();
-            
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            loadingIndicator.style.display = 'block';
-            
-            try {
-                const response = await fetch('/create_template', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        name: document.getElementById('templateName').value,
-                        description: document.getElementById('description').value,
-                        metrics: document.getElementById('metrics').value,
-                        visualizations: document.getElementById('visualizations').value
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                
-                // Add new template to list
-                templates[data.template_id] = data.template;
-                updateTemplateSelect();
-                
-                // Select the new template
-                document.getElementById('templateSelect').value = data.template_id;
-                updateTemplateDescription();
-                
-                // Hide modal and show success message
-                hideTemplateBuilder();
-                showSuccess('Template created successfully! You can now upload a document.');
-                
-            } catch (error) {
-                showError('Error creating template: ' + error.message);
-            } finally {
-                loadingIndicator.style.display = 'none';
-            }
-        }
+    .modal-content {
+        position: relative;
+        background-color: white;
+        margin: 2rem auto;
+        padding: 0;
+        width: 90%;
+        max-width: 800px;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
 
-        function showSuccess(message) {
-            const successDiv = document.createElement('div');
-            successDiv.className = 'success-message';
-            successDiv.textContent = message;
-            document.querySelector('.template-section').appendChild(successDiv);
-            setTimeout(() => successDiv.remove(), 5000);
-        }
+    .modal-header {
+        padding: 1.5rem;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
 
-        function showError(message) {
-            const errorDiv = document.querySelector('.error-message');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-            setTimeout(() => {
-                errorDiv.style.display = 'none';
-            }, 5000);
-        }
+    .modal-header h2 {
+        margin: 0;
+        font-size: 1.5rem;
+        color: #333;
+    }
 
-        function showLoading(message = 'Processing...') {
-            const loadingDiv = document.getElementById('loadingIndicator');
-            loadingDiv.querySelector('p').textContent = message;
-            loadingDiv.style.display = 'block';
-            document.getElementById('uploadSection').style.display = 'none';
-        }
+    .close {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #666;
+        cursor: pointer;
+    }
 
-        function hideLoading() {
-            document.getElementById('loadingIndicator').style.display = 'none';
-            document.getElementById('uploadSection').style.display = 'block';
-        }
+    .close:hover {
+        color: #333;
+    }
 
-        // File Upload Handling
-        const fileInput = document.getElementById('fileInput');
-        const uploadSection = document.getElementById('uploadSection');
-        const questionInput = document.getElementById('questionInput');
-        const sendButton = document.getElementById('sendButton');
+    .modal-body {
+        padding: 1.5rem;
+        max-height: calc(100vh - 200px);
+        overflow-y: auto;
+    }
 
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files && e.target.files[0]) {
-                handleFileUpload(e.target.files[0]);
-            }
-        });
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
 
-        uploadSection.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            uploadSection.style.borderColor = '#007bff';
-        });
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: #333;
+        font-weight: 500;
+    }
 
-        uploadSection.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            uploadSection.style.borderColor = '#ccc';
-        });
+    .form-group input,
+    .form-group textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 1rem;
+        font-family: inherit;
+    }
 
-        uploadSection.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            uploadSection.style.borderColor = '#ccc';
-            
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleFileUpload(files[0]);
-            }
-        });
+    .form-group textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
 
-        async function handleFileUpload(file) {
-            const templateId = document.getElementById('templateSelect').value;
-            if (!templateId) {
-                showError('Please select a template first');
-                return;
-            }
-            
-            if (!file.name.endsWith('.pdf')) {
-                showError('Please select a PDF file');
-                return;
-            }
+    .form-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        margin-top: 2rem;
+    }
 
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('template', templateId);
+    .create-button,
+    .cancel-button {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 4px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
 
-            showLoading('Analyzing document... Please wait...');
+    .create-button {
+        background-color: #007bff;
+        color: white;
+    }
 
-            try {
-                const response = await fetch('/analyze', {
-                    method: 'POST',
-                    body: formData
-                });
+    .cancel-button {
+        background-color: #6c757d;
+        color: white;
+    }
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const data = await response.json();
+    .create-button:hover {
+        background-color: #0056b3;
+    }
 
-                if (data.error) {
-                    throw new Error(data.error);
-                }
+    .cancel-button:hover {
+        background-color: #5a6268;
+    }
 
-                // Parse and display results
-                const analysis = JSON.parse(data.analysis);
-                displayResults(analysis, data.template);
-                
-                // Update state
-                documentAnalyzed = true;
-                currentDocumentId = data.documentId;
-                currentTemplate = data.template;
-                
-                // Enable chat
-                sendButton.disabled = !questionInput.value.trim();
-                addMessage("I've analyzed the document. Feel free to ask any specific questions!", false);
-                
-                // Show success message
-                showSuccess('Document analyzed successfully!');
-                
-            } catch (error) {
-                showError('Error analyzing document: ' + error.message);
-            } finally {
-                hideLoading();
-            }
-        }
+    .chart-container {
+        margin: 2rem 0;
+        padding: 1rem;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
 
-        function displayResults(analysis, template) {
-            const resultsSection = document.querySelector('.results-section');
-            resultsSection.innerHTML = ''; // Clear previous results
-            
-            // Create visualizations based on template
-            Object.entries(template.visualization).forEach(([key, config]) => {
-                const chartContainer = document.createElement('div');
-                chartContainer.className = 'chart-container';
-                resultsSection.appendChild(chartContainer);
-                
-                createVisualization(config.type, config, analysis, chartContainer);
-            });
-            
-            resultsSection.style.display = 'block';
-        }
+    .chat-section {
+        margin-top: 2rem;
+        padding: 1.5rem;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
 
-        function createVisualization(type, config, data, container) {
-            const canvas = document.createElement('canvas');
-            container.appendChild(canvas);
-            const ctx = canvas.getContext('2d');
+    .chat-messages {
+        max-height: 400px;
+        overflow-y: auto;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: white;
+        border-radius: 4px;
+    }
 
-            switch (type) {
-                case 'bar':
-                    return new Chart(ctx, {
-                        type: 'bar',
-                        data: {
-                            labels: config.fields,
-                            datasets: [{
-                                label: config.title,
-                                data: config.fields.map(field => data[field]),
-                                backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                                borderColor: 'rgba(54, 162, 235, 1)',
-                                borderWidth: 1
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            plugins: {
-                                title: {
-                                    display: true,
-                                    text: config.title
-                                }
-                            }
-                        }
-                    });
+    .chat-message {
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        border-radius: 4px;
+        position: relative;
+    }
 
-                case 'radar':
-                    return new Chart(ctx, {
-                        type: 'radar',
-                        data: {
-                            labels: config.fields,
-                            datasets: [{
-                                label: config.title,
-                                data: config.fields.map(field => data[field]),
-                                backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                                borderColor: 'rgba(54, 162, 235, 1)',
-                                borderWidth: 1
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            plugins: {
-                                title: {
-                                    display: true,
-                                    text: config.title
-                                }
-                            }
-                        }
-                    });
+    .user-message {
+        background-color: #007bff;
+        color: white;
+        margin-left: 2rem;
+    }
 
-                case 'gauge':
-                    const value = data[config.field];
-                    const gaugeDiv = document.createElement('div');
-                    gaugeDiv.className = 'gauge';
-                    gaugeDiv.innerHTML = `
-                        <h3>${config.title}</h3>
-                        <div class="gauge-value">${value}</div>
-                        <div class="gauge-range">${config.min} - ${config.max}</div>
-                    `;
-                    container.appendChild(gaugeDiv);
-                    return gaugeDiv;
-            }
-        }
+    .assistant-message {
+        background-color: #e9ecef;
+        color: #333;
+        margin-right: 2rem;
+    }
 
-        // Chat functionality
-        questionInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey && questionInput.value.trim() && documentAnalyzed) {
-                const question = questionInput.value.trim();
-                addMessage(question, true);
-                askQuestion(question);
-            }
-        });
+    .message-time {
+        font-size: 0.8rem;
+        color: rgba(255, 255, 255, 0.7);
+        position: absolute;
+        bottom: 0.25rem;
+        right: 0.5rem;
+    }
 
-        questionInput.addEventListener('input', () => {
-            sendButton.disabled = !questionInput.value.trim() || !documentAnalyzed;
-        });
+    .assistant-message .message-time {
+        color: #666;
+    }
 
-        sendButton.addEventListener('click', () => {
-            if (questionInput.value.trim() && documentAnalyzed) {
-                const question = questionInput.value.trim();
-                addMessage(question, true);
-                askQuestion(question);
-            }
-        });
+    .chat-input-container {
+        display: flex;
+        gap: 1rem;
+    }
 
-        async function askQuestion(question) {
-            const typingIndicator = document.getElementById('typingIndicator');
-            
-            try {
-                typingIndicator.style.display = 'block';
-                sendButton.disabled = true;
-                questionInput.disabled = true;
+    .chat-input-container input {
+        flex: 1;
+        padding: 0.75rem;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 1rem;
+    }
 
-                const response = await fetch('/ask', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        question: question,
-                        documentId: currentDocumentId
-                    })
-                });
+    .send-button {
+        background-color: #007bff;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
 
-                const data = await response.json();
-                
-                if (data.error) {
-                    addMessage(`Error: ${data.error}`, false);
-                } else {
-                    addMessage(data.answer, false);
-                }
-            } catch (error) {
-                addMessage(`Error: Failed to get response. Please try again.`, false);
-            } finally {
-                typingIndicator.style.display = 'none';
-                sendButton.disabled = false;
-                questionInput.disabled = false;
-                questionInput.value = '';
-                questionInput.focus();
-            }
-        }
+    .send-button:disabled {
+        background-color: #6c757d;
+        cursor: not-allowed;
+    }
 
-        function addMessage(content, isUser = false) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `chat-message ${isUser ? 'user-message' : 'assistant-message'}`;
-            messageDiv.textContent = content;
-
-            const timeDiv = document.createElement('div');
-            timeDiv.className = 'message-time';
-            timeDiv.textContent = new Date().toLocaleTimeString();
-            messageDiv.appendChild(timeDiv);
-
-            const chatMessages = document.getElementById('chatMessages');
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-    </script>
-
-    <style>
-        /* Previous styles remain the same */
-
-        .success-message {
-            color: #28a745;
-            background-color: #d4edda;
-            border: 1px solid #c3e6cb;
-            padding: 1rem;
-            margin: 1rem 0;
-            border-radius: 4px;
-            text-align: center;
-        }
-
-        .chart-container {
-            margin: 2rem 0;
-            padding: 1rem;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        /* Previous styles remain the same */
-    </style>
+    .typing-indicator {
+        display: none;
+        color: #666;
+        font-style: italic;
+        margin: 0.5rem 0;
+    }
+</style>
 </body>
 </html>
