@@ -27,7 +27,7 @@ if not api_key:
     logger.error("ANTHROPIC_API_KEY not found in environment variables")
     raise ValueError("ANTHROPIC_API_KEY environment variable is required")
 
-client = anthropic.Anthropic(api_key=api_key)
+client = anthropic.Anthropic()
 logger.info("Initialized Anthropic client")
 
 # In-memory document store
