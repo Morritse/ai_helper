@@ -114,8 +114,12 @@
                 }
                 
                 // Show preview
-                templateCode.textContent = JSON.stringify(data.template, null, 2);
-                templatePreview.style.display = 'block';
+                if (data.template) {
+                    templateCode.textContent = JSON.stringify(data.template, null, 2);
+                    templatePreview.style.display = 'block';
+                } else {
+                    throw new Error('No template generated');
+                }
                 
             } catch (error) {
                 errorMessage.textContent = error.message;
@@ -127,12 +131,14 @@
 
         async function saveTemplate() {
             try {
+                const templateJson = JSON.parse(document.getElementById('templateCode').textContent);
+                
                 const response = await fetch('/save_template', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: document.getElementById('templateCode').textContent
+                    body: JSON.stringify(templateJson)
                 });
                 
                 const data = await response.json();
@@ -227,6 +233,8 @@
         .preview-content pre {
             margin: 0;
             white-space: pre-wrap;
+            font-size: 0.9rem;
+            line-height: 1.4;
         }
 
         .preview-actions {
@@ -259,6 +267,35 @@
 
         .edit-button:hover {
             background-color: #5a6268;
+        }
+
+        .error-message {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </body>

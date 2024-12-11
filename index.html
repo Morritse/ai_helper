@@ -17,10 +17,10 @@
                 <h2>Select Analysis Type</h2>
                 <a href="/builder" class="create-template-button">Create Custom Template</a>
             </div>
-            <select id="templateSelect">
+            <select id="templateSelect" onchange="updateTemplateDescription()">
                 <option value="">Loading templates...</option>
             </select>
-            <p id="templateDescription"></p>
+            <p id="templateDescription" class="template-description"></p>
         </div>
         
         <div class="upload-section" id="uploadSection">
@@ -52,15 +52,142 @@
     </div>
 
     <script>
-        // Previous JavaScript remains the same...
+        let templates = {};
+        let currentTemplate = null;
+
+        // Load templates when page loads
+        window.addEventListener('DOMContentLoaded', async function() {
+            try {
+                const response = await fetch('/templates');
+                const data = await response.json();
+                
+                // Store templates
+                templates = data.templates.reduce((acc, template) => {
+                    acc[template.id] = template;
+                    return acc;
+                }, {});
+                
+                // Update dropdown
+                const select = document.getElementById('templateSelect');
+                select.innerHTML = `
+                    <option value="">Select a template...</option>
+                    ${data.templates.map(template => 
+                        `<option value="${template.id}">${template.name}</option>`
+                    ).join('')}
+                `;
+                
+                // Set initial description
+                updateTemplateDescription();
+                
+            } catch (error) {
+                console.error('Error loading templates:', error);
+                document.getElementById('templateSelect').innerHTML = 
+                    '<option value="">Error loading templates</option>';
+            }
+        });
+
+        function updateTemplateDescription() {
+            const select = document.getElementById('templateSelect');
+            const description = document.getElementById('templateDescription');
+            const selectedTemplate = templates[select.value];
+            
+            if (selectedTemplate) {
+                description.textContent = selectedTemplate.description;
+                description.style.display = 'block';
+            } else {
+                description.textContent = 'Please select a template';
+                description.style.display = 'block';
+            }
+        }
+
+        async function handleFileUpload(file) {
+            console.log('Handling file upload:', file.name);
+            
+            const templateId = document.getElementById('templateSelect').value;
+            if (!templateId) {
+                showError('Please select a template first');
+                return;
+            }
+            
+            if (!file.name.endsWith('.pdf')) {
+                showError('Please select a PDF file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('template', templateId);
+
+            showLoading(file);
+
+            try {
+                console.log('Sending file to server...');
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                console.log('Response received:', response);
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+
+                hideLoading();
+                
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    try {
+                        console.log('Parsing analysis:', data.analysis);
+                        const analysis = JSON.parse(data.analysis);
+                        console.log('Parsed analysis:', analysis);
+                        
+                        displayResults(analysis, data.template);
+                        documentAnalyzed = true;
+                        currentDocumentId = data.documentId;
+                        currentTemplate = data.template;
+                        sendButton.disabled = !questionInput.value.trim();
+                        addMessage("I've analyzed the document. Feel free to ask any specific questions!", false);
+                    } catch (e) {
+                        console.error('Error parsing analysis:', e);
+                        showError('Error parsing analysis results: ' + e.message);
+                    }
+                }
+            } catch (error) {
+                console.error('Network or processing error:', error);
+                hideLoading();
+                showError('Error analyzing document: ' + error.message);
+            }
+        }
+
+        // Previous functions remain the same...
     </script>
 
     <style>
+        .template-section {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
         .template-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 1rem;
+        }
+
+        .template-header h2 {
+            margin: 0;
+            color: #333;
+            font-size: 1.2rem;
         }
 
         .create-template-button {
@@ -77,21 +204,7 @@
             background-color: #218838;
         }
 
-        .template-section {
-            margin-bottom: 2rem;
-            padding: 1.5rem;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .template-section h2 {
-            margin: 0;
-            color: #333;
-            font-size: 1.2rem;
-        }
-
-        .template-section select {
+        #templateSelect {
             width: 100%;
             padding: 0.75rem;
             margin: 1rem 0;
@@ -101,7 +214,7 @@
             font-size: 1rem;
         }
 
-        .template-section p {
+        .template-description {
             margin: 0;
             color: #666;
             font-size: 0.9rem;
