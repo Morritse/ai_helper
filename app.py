@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, send_from_directory
+from flask import Flask, request, jsonify, send_file, send_from_directory, render_template
 from flask_cors import CORS
 import PyPDF2
 import io
@@ -9,7 +9,8 @@ import re
 import logging
 import sys
 import traceback
-import glob
+from templates import TEMPLATES
+from template_builder import create_custom_template
 
 # Configure logging
 logging.basicConfig(
@@ -31,20 +32,65 @@ if not api_key:
 client = anthropic.Anthropic(api_key=api_key)
 logger.info("Initialized Anthropic client")
 
-# Load analysis templates
-templates = {}
-template_dir = 'config/templates'
-for template_file in glob.glob(f'{template_dir}/*.json'):
-    try:
-        with open(template_file, 'r') as f:
-            template_name = os.path.splitext(os.path.basename(template_file))[0]
-            templates[template_name] = json.load(f)
-            logger.info(f"Loaded template: {template_name}")
-    except Exception as e:
-        logger.error(f"Error loading template {template_file}: {str(e)}")
-
 # In-memory document store
 document_store = {}
+
+@app.route('/builder')
+def template_builder():
+    """Serve the template builder page"""
+    try:
+        return send_file('templates/builder.html')
+    except Exception as e:
+        logger.error(f"Error serving builder.html: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Error serving page'}), 500
+
+@app.route('/create_template', methods=['POST'])
+def create_template():
+    """Create a custom template based on user requirements"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        description = data.get('description')
+        metrics = data.get('metrics')
+        visualizations = data.get('visualizations')
+        
+        if not all([description, metrics, visualizations]):
+            return jsonify({'error': 'Missing required fields'}), 400
+            
+        result = create_custom_template(description, metrics, visualizations)
+        
+        if not result['success']:
+            return jsonify({'error': result['error']}), 500
+            
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Error creating template: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Failed to create template'}), 500
+
+@app.route('/save_template', methods=['POST'])
+def save_template():
+    """Save a custom template"""
+    try:
+        template = request.get_json()
+        if not template:
+            return jsonify({'error': 'No template provided'}), 400
+            
+        template_id = template['name'].lower().replace(' ', '_')
+        
+        # Add to TEMPLATES dictionary
+        TEMPLATES[template_id] = template
+        
+        return jsonify({
+            'success': True,
+            'template_id': template_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error saving template: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Failed to save template'}), 500
 
 @app.route('/templates', methods=['GET'])
 def list_templates():
@@ -56,7 +102,7 @@ def list_templates():
                 'name': template['name'],
                 'description': template['description']
             }
-            for template_id, template in templates.items()
+            for template_id, template in TEMPLATES.items()
         ]
     })
 
@@ -74,11 +120,11 @@ def analyze_document():
             return jsonify({'error': 'No file provided'}), 400
             
         template_id = request.form.get('template', 'financial')  # Default to financial template
-        if template_id not in templates:
+        if template_id not in TEMPLATES:
             logger.error(f"Invalid template: {template_id}")
             return jsonify({'error': 'Invalid template'}), 400
             
-        template = templates[template_id]
+        template = TEMPLATES[template_id]
         logger.info(f"Using template: {template_id}")
         
         file = request.files['file']

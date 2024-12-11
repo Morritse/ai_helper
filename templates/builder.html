@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Template Builder</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Custom Template Builder</h1>
+        <p class="subtitle">Create a custom template for your document analysis</p>
+
+        <div class="builder-form">
+            <form id="templateForm">
+                <div class="form-section">
+                    <h2>1. Document Description</h2>
+                    <p>Describe the type of document you want to analyze and its key characteristics.</p>
+                    <textarea 
+                        id="description" 
+                        name="description" 
+                        rows="4" 
+                        placeholder="Example: This is a quarterly financial report that includes revenue statements, balance sheets, and cash flow analysis..."
+                    ></textarea>
+                </div>
+
+                <div class="form-section">
+                    <h2>2. Metrics & Data</h2>
+                    <p>What specific information do you want to extract from the document?</p>
+                    <textarea 
+                        id="metrics" 
+                        name="metrics" 
+                        rows="4" 
+                        placeholder="Example:
+1. Total revenue
+2. Operating costs
+3. Profit margins
+4. Growth rates
+5. Key performance indicators..."
+                    ></textarea>
+                </div>
+
+                <div class="form-section">
+                    <h2>3. Visualizations</h2>
+                    <p>How would you like to visualize the extracted data?</p>
+                    <textarea 
+                        id="visualizations" 
+                        name="visualizations" 
+                        rows="4" 
+                        placeholder="Example:
+1. Bar chart comparing revenue streams
+2. Line graph showing trends over time
+3. Pie chart of cost distribution
+4. Gauge chart for performance metrics..."
+                    ></textarea>
+                </div>
+
+                <div class="form-section">
+                    <button type="submit" class="create-button">Create Template</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="loading" id="loadingIndicator" style="display: none;">
+            <div class="spinner"></div>
+            <p>Generating template... Please wait...</p>
+        </div>
+
+        <div class="error-message" id="errorMessage" style="display: none;"></div>
+
+        <div class="template-preview" id="templatePreview" style="display: none;">
+            <h2>Generated Template</h2>
+            <div class="preview-content">
+                <pre><code id="templateCode"></code></pre>
+            </div>
+            <div class="preview-actions">
+                <button onclick="saveTemplate()" class="save-button">Save Template</button>
+                <button onclick="editTemplate()" class="edit-button">Edit Template</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('templateForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const errorMessage = document.getElementById('errorMessage');
+            const templatePreview = document.getElementById('templatePreview');
+            const templateCode = document.getElementById('templateCode');
+            
+            // Show loading
+            loadingIndicator.style.display = 'block';
+            errorMessage.style.display = 'none';
+            templatePreview.style.display = 'none';
+            
+            try {
+                const response = await fetch('/create_template', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        description: document.getElementById('description').value,
+                        metrics: document.getElementById('metrics').value,
+                        visualizations: document.getElementById('visualizations').value
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // Show preview
+                templateCode.textContent = JSON.stringify(data.template, null, 2);
+                templatePreview.style.display = 'block';
+                
+            } catch (error) {
+                errorMessage.textContent = error.message;
+                errorMessage.style.display = 'block';
+            } finally {
+                loadingIndicator.style.display = 'none';
+            }
+        });
+
+        async function saveTemplate() {
+            try {
+                const response = await fetch('/save_template', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: document.getElementById('templateCode').textContent
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // Redirect to main page with new template
+                window.location.href = '/?template=' + data.template_id;
+                
+            } catch (error) {
+                const errorMessage = document.getElementById('errorMessage');
+                errorMessage.textContent = error.message;
+                errorMessage.style.display = 'block';
+            }
+        }
+
+        function editTemplate() {
+            const templatePreview = document.getElementById('templatePreview');
+            templatePreview.style.display = 'none';
+        }
+    </script>
+
+    <style>
+        .subtitle {
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        .builder-form {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .form-section {
+            margin-bottom: 2rem;
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+        }
+
+        .form-section h2 {
+            margin-top: 0;
+            color: #333;
+            font-size: 1.2rem;
+        }
+
+        .form-section p {
+            color: #666;
+            margin-bottom: 1rem;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 1rem;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-family: monospace;
+            margin-bottom: 1rem;
+        }
+
+        .create-button {
+            background-color: #007bff;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            width: 100%;
+        }
+
+        .create-button:hover {
+            background-color: #0056b3;
+        }
+
+        .template-preview {
+            margin-top: 2rem;
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+        }
+
+        .preview-content {
+            background: white;
+            padding: 1rem;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        .preview-content pre {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+
+        .preview-actions {
+            margin-top: 1rem;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .save-button, .edit-button {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .save-button {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .edit-button {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .save-button:hover {
+            background-color: #218838;
+        }
+
+        .edit-button:hover {
+            background-color: #5a6268;
+        }
+    </style>
+</body>
+</html>
