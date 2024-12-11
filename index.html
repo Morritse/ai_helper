@@ -107,6 +107,8 @@
     <script>
         let templates = {};
         let currentTemplate = null;
+        let documentAnalyzed = false;
+        let currentDocumentId = null;
 
         // Load templates when page loads
         window.addEventListener('DOMContentLoaded', loadTemplates);
@@ -200,85 +202,52 @@
                 document.getElementById('templateSelect').value = data.template_id;
                 updateTemplateDescription();
                 
-                // Hide modal
+                // Hide modal and show success message
                 hideTemplateBuilder();
+                showSuccess('Template created successfully! You can now upload a document.');
                 
             } catch (error) {
-                alert('Error creating template: ' + error.message);
+                showError('Error creating template: ' + error.message);
             } finally {
                 loadingIndicator.style.display = 'none';
             }
         }
 
-        async function handleFileUpload(file) {
-            console.log('Handling file upload:', file.name);
-            
-            const templateId = document.getElementById('templateSelect').value;
-            if (!templateId) {
-                showError('Please select a template first');
-                return;
-            }
-            
-            if (!file.name.endsWith('.pdf')) {
-                showError('Please select a PDF file');
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('template', templateId);
-
-            showLoading(file);
-
-            try {
-                console.log('Sending file to server...');
-                const response = await fetch('/analyze', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                console.log('Response received:', response);
-                console.log('Response status:', response.status);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                console.log('Response data:', data);
-
-                hideLoading();
-                
-                if (data.error) {
-                    showError(data.error);
-                } else {
-                    try {
-                        console.log('Parsing analysis:', data.analysis);
-                        const analysis = JSON.parse(data.analysis);
-                        console.log('Parsed analysis:', analysis);
-                        
-                        displayResults(analysis, data.template);
-                        documentAnalyzed = true;
-                        currentDocumentId = data.documentId;
-                        currentTemplate = data.template;
-                        sendButton.disabled = !questionInput.value.trim();
-                        addMessage("I've analyzed the document. Feel free to ask any specific questions!", false);
-                    } catch (e) {
-                        console.error('Error parsing analysis:', e);
-                        showError('Error processing analysis results');
-                    }
-                }
-            } catch (error) {
-                console.error('Network or processing error:', error);
-                hideLoading();
-                showError('Error analyzing document: ' + error.message);
-            }
+        function showSuccess(message) {
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success-message';
+            successDiv.textContent = message;
+            document.querySelector('.template-section').appendChild(successDiv);
+            setTimeout(() => successDiv.remove(), 5000);
         }
 
-        // File input and drag/drop handlers
+        function showError(message) {
+            const errorDiv = document.querySelector('.error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function showLoading(message = 'Processing...') {
+            const loadingDiv = document.getElementById('loadingIndicator');
+            loadingDiv.querySelector('p').textContent = message;
+            loadingDiv.style.display = 'block';
+            document.getElementById('uploadSection').style.display = 'none';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingIndicator').style.display = 'none';
+            document.getElementById('uploadSection').style.display = 'block';
+        }
+
+        // File Upload Handling
         const fileInput = document.getElementById('fileInput');
         const uploadSection = document.getElementById('uploadSection');
-        
+        const questionInput = document.getElementById('questionInput');
+        const sendButton = document.getElementById('sendButton');
+
         fileInput.addEventListener('change', (e) => {
             if (e.target.files && e.target.files[0]) {
                 handleFileUpload(e.target.files[0]);
@@ -308,127 +277,243 @@
             }
         });
 
-        // Previous functions remain the same...
+        async function handleFileUpload(file) {
+            const templateId = document.getElementById('templateSelect').value;
+            if (!templateId) {
+                showError('Please select a template first');
+                return;
+            }
+            
+            if (!file.name.endsWith('.pdf')) {
+                showError('Please select a PDF file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('template', templateId);
+
+            showLoading('Analyzing document... Please wait...');
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                // Parse and display results
+                const analysis = JSON.parse(data.analysis);
+                displayResults(analysis, data.template);
+                
+                // Update state
+                documentAnalyzed = true;
+                currentDocumentId = data.documentId;
+                currentTemplate = data.template;
+                
+                // Enable chat
+                sendButton.disabled = !questionInput.value.trim();
+                addMessage("I've analyzed the document. Feel free to ask any specific questions!", false);
+                
+                // Show success message
+                showSuccess('Document analyzed successfully!');
+                
+            } catch (error) {
+                showError('Error analyzing document: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayResults(analysis, template) {
+            const resultsSection = document.querySelector('.results-section');
+            resultsSection.innerHTML = ''; // Clear previous results
+            
+            // Create visualizations based on template
+            Object.entries(template.visualization).forEach(([key, config]) => {
+                const chartContainer = document.createElement('div');
+                chartContainer.className = 'chart-container';
+                resultsSection.appendChild(chartContainer);
+                
+                createVisualization(config.type, config, analysis, chartContainer);
+            });
+            
+            resultsSection.style.display = 'block';
+        }
+
+        function createVisualization(type, config, data, container) {
+            const canvas = document.createElement('canvas');
+            container.appendChild(canvas);
+            const ctx = canvas.getContext('2d');
+
+            switch (type) {
+                case 'bar':
+                    return new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: config.fields,
+                            datasets: [{
+                                label: config.title,
+                                data: config.fields.map(field => data[field]),
+                                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: config.title
+                                }
+                            }
+                        }
+                    });
+
+                case 'radar':
+                    return new Chart(ctx, {
+                        type: 'radar',
+                        data: {
+                            labels: config.fields,
+                            datasets: [{
+                                label: config.title,
+                                data: config.fields.map(field => data[field]),
+                                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: config.title
+                                }
+                            }
+                        }
+                    });
+
+                case 'gauge':
+                    const value = data[config.field];
+                    const gaugeDiv = document.createElement('div');
+                    gaugeDiv.className = 'gauge';
+                    gaugeDiv.innerHTML = `
+                        <h3>${config.title}</h3>
+                        <div class="gauge-value">${value}</div>
+                        <div class="gauge-range">${config.min} - ${config.max}</div>
+                    `;
+                    container.appendChild(gaugeDiv);
+                    return gaugeDiv;
+            }
+        }
+
+        // Chat functionality
+        questionInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey && questionInput.value.trim() && documentAnalyzed) {
+                const question = questionInput.value.trim();
+                addMessage(question, true);
+                askQuestion(question);
+            }
+        });
+
+        questionInput.addEventListener('input', () => {
+            sendButton.disabled = !questionInput.value.trim() || !documentAnalyzed;
+        });
+
+        sendButton.addEventListener('click', () => {
+            if (questionInput.value.trim() && documentAnalyzed) {
+                const question = questionInput.value.trim();
+                addMessage(question, true);
+                askQuestion(question);
+            }
+        });
+
+        async function askQuestion(question) {
+            const typingIndicator = document.getElementById('typingIndicator');
+            
+            try {
+                typingIndicator.style.display = 'block';
+                sendButton.disabled = true;
+                questionInput.disabled = true;
+
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        documentId: currentDocumentId
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    addMessage(`Error: ${data.error}`, false);
+                } else {
+                    addMessage(data.answer, false);
+                }
+            } catch (error) {
+                addMessage(`Error: Failed to get response. Please try again.`, false);
+            } finally {
+                typingIndicator.style.display = 'none';
+                sendButton.disabled = false;
+                questionInput.disabled = false;
+                questionInput.value = '';
+                questionInput.focus();
+            }
+        }
+
+        function addMessage(content, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${isUser ? 'user-message' : 'assistant-message'}`;
+            messageDiv.textContent = content;
+
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = new Date().toLocaleTimeString();
+            messageDiv.appendChild(timeDiv);
+
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
     </script>
 
     <style>
-        /* Previous styles remain... */
+        /* Previous styles remain the same */
 
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
+        .success-message {
+            color: #28a745;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+            text-align: center;
         }
 
-        .modal-content {
-            position: relative;
-            background-color: white;
-            margin: 2rem auto;
-            padding: 0;
-            width: 90%;
-            max-width: 800px;
+        .chart-container {
+            margin: 2rem 0;
+            padding: 1rem;
+            background: white;
             border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
 
-        .modal-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid #dee2e6;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .modal-header h2 {
-            margin: 0;
-            font-size: 1.5rem;
-            color: #333;
-        }
-
-        .close {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #666;
-            cursor: pointer;
-        }
-
-        .close:hover {
-            color: #333;
-        }
-
-        .modal-body {
-            padding: 1.5rem;
-            max-height: calc(100vh - 200px);
-            overflow-y: auto;
-        }
-
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: #333;
-            font-weight: 500;
-        }
-
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            font-size: 1rem;
-            font-family: inherit;
-        }
-
-        .form-group textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-
-        .form-actions {
-            display: flex;
-            gap: 1rem;
-            justify-content: flex-end;
-            margin-top: 2rem;
-        }
-
-        .create-button,
-        .cancel-button {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 4px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        .create-button {
-            background-color: #007bff;
-            color: white;
-        }
-
-        .cancel-button {
-            background-color: #6c757d;
-            color: white;
-        }
-
-        .create-button:hover {
-            background-color: #0056b3;
-        }
-
-        .cancel-button:hover {
-            background-color: #5a6268;
-        }
-
-        /* Previous styles remain... */
+        /* Previous styles remain the same */
     </style>
 </body>
 </html>
