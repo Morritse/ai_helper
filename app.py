@@ -1,246 +1,246 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
-import json
-import os
-import uuid
-from werkzeug.utils import secure_filename
 import PyPDF2
+import io
 import anthropic
-from dotenv import load_dotenv
+import os
+import json
+import re
+import logging
+import sys
+import traceback
 
-# Load environment variables
-load_dotenv()
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] {%(pathname)s:%(lineno)d} %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+app = Flask(__name__, static_url_path='/static')
+CORS(app)
 
-app.config['UPLOAD_FOLDER'] = '/tmp/uploads'  # Use /tmp for Vercel
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+# Initialize Anthropic client with API key from environment variable
+api_key = os.getenv('ANTHROPIC_API_KEY')
+if not api_key:
+    logger.error("ANTHROPIC_API_KEY not found in environment variables")
+    raise ValueError("ANTHROPIC_API_KEY environment variable is required")
 
-# Configure Claude
-claude = anthropic.Client(api_key=os.getenv('ANTHROPIC_API_KEY'))
-if not os.getenv('ANTHROPIC_API_KEY'):
-    print("Warning: ANTHROPIC_API_KEY not set")
+client = anthropic.Anthropic(api_key=api_key)
+logger.info("Initialized Anthropic client")
 
-# Default template
-DEFAULT_TEMPLATE = {
-    "id": "financial-default",
-    "name": "Financial Report Analysis",
-    "description": "Analyzes financial reports to extract key metrics and assess company health",
-    "metrics": [
-        "Revenue",
-        "Net Income",
-        "Operating Cash Flow",
-        "Total Assets",
-        "Liquidity Ratio",
-        "Profitability Ratio",
-        "Efficiency Ratio",
-        "Solvency Ratio"
-    ],
-    "visualization": {
-        "financial_health": {
-            "type": "radar",
-            "title": "Financial Health Indicators",
-            "fields": ["liquidity", "profitability", "efficiency", "solvency"]
-        },
-        "key_metrics": {
-            "type": "bar",
-            "title": "Key Financial Metrics",
-            "fields": ["revenue", "net_income", "operating_cash_flow", "total_assets"]
-        }
-    }
-}
-
-@app.route('/')
-def home():
-    return app.send_static_file('index.html')
-
-@app.route('/templates', methods=['GET'])
-def get_templates():
-    try:
-        # Always return at least the default template
-        templates = [DEFAULT_TEMPLATE]
-        return jsonify({'templates': templates})
-    except Exception as e:
-        print(f"Error in get_templates: {str(e)}")
-        # Still return default template even if there's an error
-        return jsonify({'templates': [DEFAULT_TEMPLATE]})
-
-@app.route('/create_template', methods=['POST', 'OPTIONS'])
-def create_template():
-    if request.method == 'OPTIONS':
-        return '', 204
-        
-    try:
-        data = request.json
-        template_id = str(uuid.uuid4())
-        
-        template = {
-            'id': template_id,
-            'name': data['name'],
-            'description': data['description'],
-            'metrics': data['metrics'].split('\n'),
-            'visualization': {
-                'financial_health': {
-                    'type': 'radar',
-                    'title': 'Financial Health Indicators',
-                    'fields': ['liquidity', 'profitability', 'efficiency', 'solvency']
-                },
-                'key_metrics': {
-                    'type': 'bar',
-                    'title': 'Key Financial Metrics',
-                    'fields': ['revenue', 'net_income', 'operating_cash_flow', 'total_assets']
-                }
-            }
-        }
-        
-        return jsonify({
-            'template_id': template_id,
-            'template': template
-        })
-    except Exception as e:
-        print(f"Error in create_template: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+# In-memory document store
+document_store = {}
 
 @app.route('/analyze', methods=['POST', 'OPTIONS'])
 def analyze_document():
     if request.method == 'OPTIONS':
         return '', 204
         
-    if not os.getenv('ANTHROPIC_API_KEY'):
-        return jsonify({'error': 'Claude API key not configured'}), 500
-        
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-    
-    if not file.filename.endswith('.pdf'):
-        return jsonify({'error': 'File must be a PDF'}), 400
-    
-    template_id = request.form.get('template')
-    if not template_id:
-        return jsonify({'error': 'No template specified'}), 400
-    
-    # Ensure upload directory exists
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    
-    # Save and process PDF
-    filename = secure_filename(file.filename)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
+    logger.info("Received analyze request")
+    logger.info(f"Request headers: {dict(request.headers)}")
     
     try:
+        if 'file' not in request.files:
+            logger.error("No file provided in request")
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        logger.info(f"Received file: {file.filename}")
+        
+        if file.filename == '':
+            logger.error("No file selected")
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not file.filename.endswith('.pdf'):
+            logger.error("Invalid file type")
+            return jsonify({'error': 'File must be a PDF'}), 400
+        
+        # Read the PDF file
+        pdf_content = file.read()
+        logger.info(f"Read {len(pdf_content)} bytes from file")
+        
         # Extract text from PDF
-        with open(filepath, 'rb') as f:
-            pdf = PyPDF2.PdfReader(f)
-            text = ''
-            for page in pdf.pages:
+        try:
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_content))
+            text = ""
+            for page in pdf_reader.pages:
                 text += page.extract_text()
+            logger.info(f"Extracted {len(text)} characters from PDF")
+            
+            if len(text.strip()) == 0:
+                logger.error("No text extracted from PDF")
+                return jsonify({'error': 'Could not extract text from PDF'}), 400
+                
+        except Exception as e:
+            logger.error(f"Error extracting text from PDF: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({'error': 'Failed to read PDF file'}), 400
         
-        # Analyze text using Claude
-        analysis_prompt = f"""
-        Analyze the following financial document text and extract key metrics:
-        {text[:10000]}  # Claude can handle more text than GPT
+        # Generate document ID and store text
+        doc_id = str(hash(text))
+        document_store[doc_id] = text
+        logger.info(f"Stored document with ID: {doc_id}")
         
-        Return the analysis as a JSON object with these fields:
-        - liquidity
-        - profitability
-        - efficiency
-        - solvency
-        - revenue
-        - net_income
-        - operating_cash_flow
-        - total_assets
-        
-        Each field should be a number between 0 and 100.
-        
-        Format your response as valid JSON only, with no additional text.
-        """
-        
-        response = claude.messages.create(
-            model="claude-3-opus-20240229",
-            max_tokens=1000,
-            messages=[{
-                "role": "user",
-                "content": analysis_prompt
-            }]
-        )
-        
-        analysis = response.content[0].text
-        
-        # Store analysis for later Q&A
-        document_id = str(uuid.uuid4())
-        analysis_path = os.path.join(app.config['UPLOAD_FOLDER'], f'{document_id}.txt')
-        with open(analysis_path, 'w') as f:
-            f.write(text)
-        
-        return jsonify({
-            'documentId': document_id,
-            'analysis': analysis,
-            'template': DEFAULT_TEMPLATE
-        })
-        
+        # Get analysis from Claude
+        try:
+            logger.info("Sending text to Claude for analysis")
+            message = client.messages.create(
+                model="claude-3-sonnet-20240229",
+                max_tokens=4000,
+                temperature=0,
+                messages=[{
+                    "role": "user",
+                    "content": f"""Analyze this financial document and provide:
+
+1. Key financial metrics:
+   - Extract and verify all numerical values
+   - Convert text-based numbers to numerical format
+   - Identify and standardize units (thousands, millions, etc.)
+
+2. Financial health assessment:
+   - Analyze current financial position
+   - Compare against industry standards
+   - Identify trends and patterns
+   - Evaluate operational efficiency
+
+3. Risk assessment:
+   - Identify potential red flags
+   - Analyze debt structure and obligations
+   - Evaluate market and industry risks
+   - Consider regulatory compliance issues
+
+4. Strategic recommendations:
+   - Provide actionable insights
+   - Suggest areas for improvement
+   - Recommend risk mitigation strategies
+   - Outline potential growth opportunities
+
+5. Creditworthiness evaluation:
+   - Calculate key financial ratios
+   - Compare to industry benchmarks
+   - Consider qualitative factors
+   - Provide a score from 0-100 with detailed justification
+
+Format the response in JSON with the following structure:
+{{
+    "metrics": {{
+        "revenue": number or null,
+        "net_income": number or null,
+        "total_assets": number or null,
+        "total_liabilities": number or null,
+        "cash_flow": number or null
+    }},
+    "health_assessment": "detailed assessment string",
+    "risk_factors": ["list", "of", "risk", "factors"],
+    "recommendations": ["list", "of", "recommendations"],
+    "credit_score": number,
+    "ratios": {{
+        "debt_to_equity": number or null,
+        "current_ratio": number or null,
+        "quick_ratio": number or null
+    }},
+    "analysis_confidence": number
+}}
+
+Here's the document text:
+{text}"""
+                }]
+            )
+            
+            logger.info("Received response from Claude")
+            response_text = message.content[0].text
+            
+            # Fix and validate JSON
+            try:
+                json_str = re.search(r'\{.*\}', response_text, re.DOTALL).group(0)
+                json_str = re.sub(r'(\d+|\btrue\b|\bfalse\b|\bnull\b|"[^"]*")\s+(?=["{\[]|[a-zA-Z])', r'\1,', json_str)
+                json_str = re.sub(r'(\}|\]|\d+|"[^"]*")\s*\n\s*"', r'\1,\n"', json_str)
+                json_str = re.sub(r',(\s*[\]}])', r'\1', json_str)
+                
+                # Validate JSON
+                json.loads(json_str)
+                logger.info("Successfully processed and validated JSON response")
+                
+                return jsonify({
+                    'analysis': json_str,
+                    'documentId': doc_id
+                })
+            except Exception as e:
+                logger.error(f"Error processing Claude response: {str(e)}\n{traceback.format_exc()}")
+                return jsonify({'error': 'Failed to process analysis results'}), 500
+                
+        except Exception as e:
+            logger.error(f"Error getting analysis from Claude: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({'error': 'Failed to analyze document'}), 500
+            
     except Exception as e:
-        print(f"Error in analyze_document: {str(e)}")
+        logger.error(f"Error processing document: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
-    finally:
-        # Clean up uploaded file
-        if os.path.exists(filepath):
-            os.remove(filepath)
 
 @app.route('/ask', methods=['POST', 'OPTIONS'])
-def ask_question():
+def ask():
+    """Handle questions about the analyzed document"""
     if request.method == 'OPTIONS':
         return '', 204
         
-    if not os.getenv('ANTHROPIC_API_KEY'):
-        return jsonify({'error': 'Claude API key not configured'}), 500
-        
+    logger.info("Received question request")
+    logger.info(f"Request headers: {dict(request.headers)}")
+    logger.info(f"Request body: {request.get_json()}")
+    
     try:
-        data = request.json
-        question = data.get('question')
-        document_id = data.get('documentId')
-        
-        if not question or not document_id:
-            return jsonify({'error': 'Question and document ID are required'}), 400
-        
-        # Get document text
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], f'{document_id}.txt')
-        if not os.path.exists(filepath):
-            return jsonify({'error': 'Document not found'}), 404
-            
-        with open(filepath) as f:
-            text = f.read()
-        
-        # Use Claude to answer question
-        prompt = f"""
-        Based on this document:
-        {text[:10000]}
-        
-        Answer this question:
-        {question}
-        
-        Provide a clear and concise answer based only on the information in the document.
-        """
-        
-        response = claude.messages.create(
-            model="claude-3-opus-20240229",
-            max_tokens=1000,
+        data = request.get_json()
+    except Exception as e:
+        logger.error(f"Error parsing JSON request: {str(e)}")
+        return jsonify({'error': 'Invalid JSON'}), 400
+    
+    if not data or 'question' not in data or 'documentId' not in data:
+        logger.error("Missing question or document ID")
+        return jsonify({'error': 'Missing question or document ID'}), 400
+    
+    doc_id = data['documentId']
+    if doc_id not in document_store:
+        logger.error(f"Document not found: {doc_id}")
+        return jsonify({'error': 'Document not found. Please upload it again.'}), 404
+    
+    try:
+        logger.info("Sending question to Claude")
+        message = client.messages.create(
+            model="claude-3-sonnet-20240229",
+            max_tokens=4000,
+            temperature=0,
             messages=[{
                 "role": "user",
-                "content": prompt
+                "content": f"""Here is a financial document text for context:
+
+{document_store[doc_id]}
+
+Answer this question about the document: {data['question']}
+
+Provide a clear, concise answer based on the financial data. If the information isn't available in the document, say so."""
             }]
         )
-        
-        answer = response.content[0].text
-        return jsonify({'answer': answer})
-        
+        logger.info("Received answer from Claude")
+        return jsonify({'answer': message.content[0].text})
     except Exception as e:
-        print(f"Error in ask_question: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error asking question: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Failed to get answer from Claude'}), 500
+
+@app.route('/')
+def index():
+    try:
+        return send_file('index.html')
+    except Exception as e:
+        logger.error(f"Error serving index.html: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Error serving page'}), 500
+
+@app.route('/static/<path:path>')
+def serve_static(path):
+    try:
+        return send_from_directory('static', path)
+    except Exception as e:
+        logger.error(f"Error serving static file {path}: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': 'Error serving static file'}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5000)
