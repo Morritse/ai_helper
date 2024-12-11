@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 import PyPDF2
 import io
@@ -9,8 +9,6 @@ import re
 import logging
 import sys
 import traceback
-from templates import TEMPLATES
-from template_builder import create_custom_template
 
 # Configure logging
 logging.basicConfig(
@@ -32,17 +30,183 @@ if not api_key:
 client = anthropic.Anthropic(api_key=api_key)
 logger.info("Initialized Anthropic client")
 
+# Built-in templates
+TEMPLATES = {
+    "financial": {
+        "name": "Financial Analysis",
+        "description": "Analyze financial documents and statements",
+        "prompt_template": """Analyze this financial document and provide:
+
+1. Key financial metrics:
+   - Extract and verify all numerical values
+   - Convert text-based numbers to numerical format
+   - Identify and standardize units (thousands, millions, etc.)
+
+2. Financial health assessment:
+   - Analyze current financial position
+   - Compare against industry standards
+   - Identify trends and patterns
+   - Evaluate operational efficiency
+
+3. Risk assessment:
+   - Identify potential red flags
+   - Analyze debt structure and obligations
+   - Evaluate market and industry risks
+   - Consider regulatory compliance issues
+
+4. Strategic recommendations:
+   - Provide actionable insights
+   - Suggest areas for improvement
+   - Recommend risk mitigation strategies
+   - Outline potential growth opportunities
+
+5. Creditworthiness evaluation:
+   - Calculate key financial ratios
+   - Compare to industry benchmarks
+   - Consider qualitative factors
+   - Provide a score from 0-100 with detailed justification
+
+Format the response in JSON with the following structure:
+{
+    "metrics": {
+        "revenue": number or null,
+        "net_income": number or null,
+        "total_assets": number or null,
+        "total_liabilities": number or null,
+        "cash_flow": number or null
+    },
+    "health_assessment": "detailed assessment string",
+    "risk_factors": ["list", "of", "risk", "factors"],
+    "recommendations": ["list", "of", "recommendations"],
+    "credit_score": number,
+    "ratios": {
+        "debt_to_equity": number or null,
+        "current_ratio": number or null,
+        "quick_ratio": number or null
+    },
+    "analysis_confidence": number
+}""",
+        "visualization": {
+            "metrics": {
+                "type": "bar",
+                "fields": ["revenue", "net_income", "cash_flow"],
+                "title": "Key Financial Metrics",
+                "unit": "millions"
+            },
+            "ratios": {
+                "type": "radar",
+                "fields": ["debt_to_equity", "current_ratio", "quick_ratio"],
+                "title": "Financial Ratios Analysis"
+            },
+            "score": {
+                "type": "gauge",
+                "field": "credit_score",
+                "title": "Credit Score",
+                "min": 0,
+                "max": 100
+            }
+        }
+    },
+    "legal": {
+        "name": "Legal Document Analysis",
+        "description": "Analyze legal documents, contracts, and agreements",
+        "prompt_template": """Analyze this legal document and provide:
+
+1. Document Classification:
+   - Document type and purpose
+   - Jurisdiction and governing law
+   - Parties involved
+   - Effective date and duration
+
+2. Key Terms Analysis:
+   - Main obligations and rights
+   - Critical deadlines and dates
+   - Payment terms and conditions
+   - Termination clauses
+
+3. Risk Assessment:
+   - Potential legal risks
+   - Compliance requirements
+   - Liability exposure
+   - Dispute resolution mechanisms
+
+4. Recommendations:
+   - Areas requiring attention
+   - Suggested modifications
+   - Compliance measures
+   - Risk mitigation strategies
+
+5. Overall Evaluation:
+   - Document completeness
+   - Legal enforceability
+   - Risk level assessment
+   - Provide a score from 0-100 with justification
+
+Format the response in JSON with the following structure:
+{
+    "classification": {
+        "type": "string",
+        "jurisdiction": "string",
+        "parties": ["list of parties"],
+        "effective_date": "date string",
+        "duration": "string"
+    },
+    "key_terms": {
+        "obligations": ["list of obligations"],
+        "deadlines": ["list of deadlines"],
+        "payment_terms": "string",
+        "termination_clauses": ["list of clauses"]
+    },
+    "risks": {
+        "legal_risks": ["list of risks"],
+        "compliance_requirements": ["list of requirements"],
+        "liability_concerns": ["list of concerns"]
+    },
+    "recommendations": ["list of recommendations"],
+    "evaluation": {
+        "completeness_score": "number 0-100",
+        "enforceability_score": "number 0-100",
+        "risk_level": "string (Low/Medium/High)",
+        "overall_score": "number 0-100"
+    }
+}""",
+        "visualization": {
+            "scores": {
+                "type": "radar",
+                "fields": ["evaluation.completeness_score", "evaluation.enforceability_score", "evaluation.overall_score"],
+                "title": "Document Quality Scores"
+            },
+            "risk_level": {
+                "type": "gauge",
+                "field": "evaluation.overall_score",
+                "title": "Overall Risk Level",
+                "min": 0,
+                "max": 100
+            }
+        }
+    }
+}
+
 # In-memory document store
 document_store = {}
 
-@app.route('/builder')
-def template_builder():
-    """Serve the template builder page"""
-    try:
-        return send_file('templates/builder.html')
-    except Exception as e:
-        logger.error(f"Error serving builder.html: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({'error': 'Error serving page'}), 500
+# In-memory custom templates store
+custom_templates = {}
+
+@app.route('/templates', methods=['GET'])
+def list_templates():
+    """List available analysis templates"""
+    all_templates = {**TEMPLATES, **custom_templates}
+    return jsonify({
+        'templates': [
+            {
+                'id': template_id,
+                'name': template['name'],
+                'description': template['description']
+            }
+            for template_id, template in all_templates.items()
+        ]
+    })
 
 @app.route('/create_template', methods=['POST'])
 def create_template():
@@ -59,52 +223,68 @@ def create_template():
         if not all([description, metrics, visualizations]):
             return jsonify({'error': 'Missing required fields'}), 400
             
-        result = create_custom_template(description, metrics, visualizations)
+        # Generate template using Claude
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=4000,
+            temperature=0,
+            messages=[{
+                "role": "user",
+                "content": f"""Help me create a document analysis template.
+
+Document Description:
+{description}
+
+Metrics/Data to Extract:
+{metrics}
+
+Desired Visualizations:
+{visualizations}
+
+Create a template that includes:
+1. A structured prompt for analyzing such documents
+2. A JSON schema for the response format
+3. Visualization configuration
+
+Format the response as a JSON object with these fields:
+{{
+    "name": "Template name based on document type",
+    "description": "Brief description of what this template analyzes",
+    "prompt_template": "The full prompt with clear instructions and sections",
+    "visualization": {{
+        Visualization configuration matching the desired charts/graphs
+    }}
+}}
+
+Make the prompt very specific about:
+- What information to extract
+- How to format numbers and text
+- What patterns to look for
+- How to structure the analysis
+
+The visualization config should specify:
+- Chart types (bar, radar, gauge, etc.)
+- Which fields to display
+- Titles and labels
+- Units and ranges where applicable"""
+            }]
+        )
         
-        if not result['success']:
-            return jsonify({'error': result['error']}), 500
-            
-        return jsonify(result)
+        template = json.loads(message.content[0].text)
+        template_id = template['name'].lower().replace(' ', '_')
+        
+        # Store template
+        custom_templates[template_id] = template
+        
+        return jsonify({
+            'success': True,
+            'template_id': template_id,
+            'template': template
+        })
         
     except Exception as e:
         logger.error(f"Error creating template: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'error': 'Failed to create template'}), 500
-
-@app.route('/save_template', methods=['POST'])
-def save_template():
-    """Save a custom template"""
-    try:
-        template = request.get_json()
-        if not template:
-            return jsonify({'error': 'No template provided'}), 400
-            
-        template_id = template['name'].lower().replace(' ', '_')
-        
-        # Add to TEMPLATES dictionary
-        TEMPLATES[template_id] = template
-        
-        return jsonify({
-            'success': True,
-            'template_id': template_id
-        })
-        
-    except Exception as e:
-        logger.error(f"Error saving template: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({'error': 'Failed to save template'}), 500
-
-@app.route('/templates', methods=['GET'])
-def list_templates():
-    """List available analysis templates"""
-    return jsonify({
-        'templates': [
-            {
-                'id': template_id,
-                'name': template['name'],
-                'description': template['description']
-            }
-            for template_id, template in TEMPLATES.items()
-        ]
-    })
 
 @app.route('/analyze', methods=['POST', 'OPTIONS'])
 def analyze_document():
@@ -120,11 +300,14 @@ def analyze_document():
             return jsonify({'error': 'No file provided'}), 400
             
         template_id = request.form.get('template', 'financial')  # Default to financial template
-        if template_id not in TEMPLATES:
+        
+        # Check both built-in and custom templates
+        all_templates = {**TEMPLATES, **custom_templates}
+        if template_id not in all_templates:
             logger.error(f"Invalid template: {template_id}")
             return jsonify({'error': 'Invalid template'}), 400
             
-        template = TEMPLATES[template_id]
+        template = all_templates[template_id]
         logger.info(f"Using template: {template_id}")
         
         file = request.files['file']
