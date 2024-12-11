@@ -14,11 +14,8 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['UPLOAD_FOLDER'] = '/tmp/uploads'  # Use /tmp for Vercel
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-
-# Ensure upload directory exists
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Configure Claude
 claude = anthropic.Client(api_key=os.getenv('ANTHROPIC_API_KEY'))
@@ -54,13 +51,20 @@ DEFAULT_TEMPLATE = {
     }
 }
 
+@app.route('/')
+def home():
+    return app.send_static_file('index.html')
+
 @app.route('/templates', methods=['GET'])
 def get_templates():
     try:
-        # Return default template
-        return jsonify({'templates': [DEFAULT_TEMPLATE]})
+        # Always return at least the default template
+        templates = [DEFAULT_TEMPLATE]
+        return jsonify({'templates': templates})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error in get_templates: {str(e)}")
+        # Still return default template even if there's an error
+        return jsonify({'templates': [DEFAULT_TEMPLATE]})
 
 @app.route('/create_template', methods=['POST', 'OPTIONS'])
 def create_template():
@@ -95,6 +99,7 @@ def create_template():
             'template': template
         })
     except Exception as e:
+        print(f"Error in create_template: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/analyze', methods=['POST', 'OPTIONS'])
@@ -118,6 +123,9 @@ def analyze_document():
     template_id = request.form.get('template')
     if not template_id:
         return jsonify({'error': 'No template specified'}), 400
+    
+    # Ensure upload directory exists
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     
     # Save and process PDF
     filename = secure_filename(file.filename)
@@ -165,7 +173,8 @@ def analyze_document():
         
         # Store analysis for later Q&A
         document_id = str(uuid.uuid4())
-        with open(os.path.join(app.config['UPLOAD_FOLDER'], f'{document_id}.txt'), 'w') as f:
+        analysis_path = os.path.join(app.config['UPLOAD_FOLDER'], f'{document_id}.txt')
+        with open(analysis_path, 'w') as f:
             f.write(text)
         
         return jsonify({
@@ -175,6 +184,7 @@ def analyze_document():
         })
         
     except Exception as e:
+        print(f"Error in analyze_document: {str(e)}")
         return jsonify({'error': str(e)}), 500
     finally:
         # Clean up uploaded file
@@ -229,6 +239,7 @@ def ask_question():
         return jsonify({'answer': answer})
         
     except Exception as e:
+        print(f"Error in ask_question: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
