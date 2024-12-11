@@ -10,7 +10,7 @@
             }
         },
         {
-            "src": "*.html",
+            "src": "templates/*.html",
             "use": "@vercel/static"
         },
         {
@@ -24,32 +24,12 @@
             "dest": "/static/$1"
         },
         {
-            "src": "/analyze",
-            "methods": ["POST", "OPTIONS"],
-            "dest": "app.py",
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type"
-            }
-        },
-        {
-            "src": "/ask",
-            "methods": ["POST", "OPTIONS"],
-            "dest": "app.py",
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type"
-            }
-        },
-        {
-            "src": "/",
-            "dest": "/index.html"
+            "src": "/builder",
+            "dest": "/templates/builder.html"
         },
         {
             "src": "/(.*)",
-            "dest": "/$1"
+            "dest": "app.py"
         }
     ]
 }
