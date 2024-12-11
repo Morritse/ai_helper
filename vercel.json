@@ -14,14 +14,14 @@
             "use": "@vercel/static"
         },
         {
-            "src": "static/**",
+            "src": "config/**",
             "use": "@vercel/static"
         }
     ],
     "routes": [
         {
-            "src": "/static/(.*)",
-            "dest": "/static/$1"
+            "src": "/config/(.*)",
+            "dest": "/config/$1"
         },
         {
             "src": "/templates",
