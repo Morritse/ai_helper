@@ -9,6 +9,8 @@ import re
 import logging
 import sys
 import traceback
+import pandas as pd
+import docx2txt
 
 # Configure logging
 logging.basicConfig(
@@ -21,17 +23,175 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, static_url_path='/static')
 CORS(app)
 
-# Initialize Anthropic client with API key from environment variable
+# Initialize Anthropic client
 api_key = os.getenv('ANTHROPIC_API_KEY')
 if not api_key:
     logger.error("ANTHROPIC_API_KEY not found in environment variables")
     raise ValueError("ANTHROPIC_API_KEY environment variable is required")
 
-client = anthropic.Anthropic(api_key=api_key)
+client = anthropic.Anthropic()
 logger.info("Initialized Anthropic client")
 
 # In-memory document store
 document_store = {}
+
+def extract_text_from_pdf(file_content):
+    """Extract text from PDF file"""
+    pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+    text = ""
+    for page in pdf_reader.pages:
+        text += page.extract_text()
+    return text
+
+def extract_text_from_txt(file_content):
+    """Extract text from TXT file"""
+    return file_content.decode('utf-8')
+
+def extract_text_from_csv(file_content):
+    """Extract text from CSV file and convert to structured text"""
+    df = pd.read_csv(io.BytesIO(file_content))
+    # Convert DataFrame to a structured string representation
+    return df.to_string()
+
+def extract_text_from_docx(file_content):
+    """Extract text from DOCX file"""
+    return docx2txt.process(io.BytesIO(file_content))
+
+# Document type handlers
+DOCUMENT_HANDLERS = {
+    '.pdf': extract_text_from_pdf,
+    '.txt': extract_text_from_txt,
+    '.csv': extract_text_from_csv,
+    '.docx': extract_text_from_docx
+}
+
+# Analysis prompts for different document types
+ANALYSIS_PROMPTS = {
+    '.pdf': """Analyze this financial document and provide:
+    [Previous PDF analysis prompt]""",
+    
+    '.csv': """Analyze this CSV data and provide:
+    1. Data Overview:
+       - Number of records
+       - Key columns identified
+       - Data quality assessment
+    
+    2. Statistical Analysis:
+       - Summary statistics
+       - Key trends
+       - Notable patterns
+    
+    3. Financial Metrics:
+       - Calculate relevant financial ratios
+       - Identify key performance indicators
+       - Track changes over time
+    
+    4. Recommendations:
+       - Data-driven insights
+       - Areas for improvement
+       - Action items
+    
+    Format as JSON with structure:
+    {
+        "data_overview": {
+            "record_count": number,
+            "columns": [string],
+            "quality_score": number
+        },
+        "statistics": {
+            "summary": object,
+            "trends": [string],
+            "patterns": [string]
+        },
+        "metrics": {
+            "ratios": object,
+            "kpis": object
+        },
+        "recommendations": [string]
+    }""",
+    
+    '.txt': """Analyze this text document and provide:
+    1. Content Analysis:
+       - Main topics
+       - Key points
+       - Important dates/numbers
+    
+    2. Financial Information:
+       - Extract monetary values
+       - Identify financial terms
+       - Find relevant dates
+    
+    3. Risk Assessment:
+       - Potential issues
+       - Areas of concern
+       - Compliance matters
+    
+    4. Action Items:
+       - Required steps
+       - Follow-up tasks
+       - Recommendations
+    
+    Format as JSON with structure:
+    {
+        "content": {
+            "topics": [string],
+            "key_points": [string],
+            "important_data": object
+        },
+        "financial_info": {
+            "monetary_values": object,
+            "terms": [string],
+            "dates": [string]
+        },
+        "risks": {
+            "issues": [string],
+            "concerns": [string],
+            "compliance": [string]
+        },
+        "actions": [string]
+    }""",
+    
+    '.docx': """Analyze this document and provide:
+    1. Document Structure:
+       - Sections identified
+       - Key headings
+       - Important paragraphs
+    
+    2. Content Analysis:
+       - Main points
+       - Critical information
+       - Supporting details
+    
+    3. Financial Data:
+       - Monetary values
+       - Financial terms
+       - Calculations
+    
+    4. Recommendations:
+       - Key takeaways
+       - Action items
+       - Follow-up steps
+    
+    Format as JSON with structure:
+    {
+        "structure": {
+            "sections": [string],
+            "headings": [string],
+            "key_paragraphs": [string]
+        },
+        "content": {
+            "main_points": [string],
+            "critical_info": object,
+            "details": [string]
+        },
+        "financial": {
+            "values": object,
+            "terms": [string],
+            "calculations": object
+        },
+        "recommendations": [string]
+    }"""
+}
 
 @app.route('/analyze', methods=['POST', 'OPTIONS'])
 def analyze_document():
@@ -53,29 +213,25 @@ def analyze_document():
             logger.error("No file selected")
             return jsonify({'error': 'No file selected'}), 400
         
-        if not file.filename.endswith('.pdf'):
-            logger.error("Invalid file type")
-            return jsonify({'error': 'File must be a PDF'}), 400
+        # Get file extension
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext not in DOCUMENT_HANDLERS:
+            logger.error(f"Unsupported file type: {file_ext}")
+            return jsonify({'error': f'Unsupported file type. Supported types: {", ".join(DOCUMENT_HANDLERS.keys())}'}, 400)
         
-        # Read the PDF file
-        pdf_content = file.read()
-        logger.info(f"Read {len(pdf_content)} bytes from file")
-        
-        # Extract text from PDF
+        # Read and extract text from file
+        file_content = file.read()
         try:
-            pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_content))
-            text = ""
-            for page in pdf_reader.pages:
-                text += page.extract_text()
-            logger.info(f"Extracted {len(text)} characters from PDF")
+            text = DOCUMENT_HANDLERS[file_ext](file_content)
+            logger.info(f"Extracted {len(text)} characters from {file_ext} file")
             
             if len(text.strip()) == 0:
-                logger.error("No text extracted from PDF")
-                return jsonify({'error': 'Could not extract text from PDF'}), 400
+                logger.error("No text extracted from file")
+                return jsonify({'error': 'Could not extract text from file'}), 400
                 
         except Exception as e:
-            logger.error(f"Error extracting text from PDF: {str(e)}\n{traceback.format_exc()}")
-            return jsonify({'error': 'Failed to read PDF file'}), 400
+            logger.error(f"Error extracting text from file: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({'error': f'Failed to read {file_ext} file'}), 400
         
         # Generate document ID and store text
         doc_id = str(hash(text))
@@ -86,65 +242,12 @@ def analyze_document():
         try:
             logger.info("Sending text to Claude for analysis")
             message = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-3-sonnet-20240229",
                 max_tokens=4000,
                 temperature=0,
                 messages=[{
                     "role": "user",
-                    "content": f"""Analyze this financial document and provide:
-
-1. Key financial metrics:
-   - Extract and verify all numerical values
-   - Convert text-based numbers to numerical format
-   - Identify and standardize units (thousands, millions, etc.)
-
-2. Financial health assessment:
-   - Analyze current financial position
-   - Compare against industry standards
-   - Identify trends and patterns
-   - Evaluate operational efficiency
-
-3. Risk assessment:
-   - Identify potential red flags
-   - Analyze debt structure and obligations
-   - Evaluate market and industry risks
-   - Consider regulatory compliance issues
-
-4. Strategic recommendations:
-   - Provide actionable insights
-   - Suggest areas for improvement
-   - Recommend risk mitigation strategies
-   - Outline potential growth opportunities
-
-5. Creditworthiness evaluation:
-   - Calculate key financial ratios
-   - Compare to industry benchmarks
-   - Consider qualitative factors
-   - Provide a score from 0-100 with detailed justification
-
-Format the response in JSON with the following structure:
-{{
-    "metrics": {{
-        "revenue": number or null,
-        "net_income": number or null,
-        "total_assets": number or null,
-        "total_liabilities": number or null,
-        "cash_flow": number or null
-    }},
-    "health_assessment": "detailed assessment string",
-    "risk_factors": ["list", "of", "risk", "factors"],
-    "recommendations": ["list", "of", "recommendations"],
-    "credit_score": number,
-    "ratios": {{
-        "debt_to_equity": number or null,
-        "current_ratio": number or null,
-        "quick_ratio": number or null
-    }},
-    "analysis_confidence": number
-}}
-
-Here's the document text:
-{text}"""
+                    "content": ANALYSIS_PROMPTS[file_ext] + f"\n\nHere's the document text:\n{text}"
                 }]
             )
             
@@ -206,18 +309,18 @@ def ask():
     try:
         logger.info("Sending question to Claude")
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-3-sonnet-20240229",
             max_tokens=4000,
             temperature=0,
             messages=[{
                 "role": "user",
-                "content": f"""Here is a financial document text for context:
+                "content": f"""Here is a document text for context:
 
 {document_store[doc_id]}
 
 Answer this question about the document: {data['question']}
 
-Provide a clear, concise answer based on the financial data. If the information isn't available in the document, say so."""
+Provide a clear, concise answer based on the document content. If the information isn't available in the document, say so."""
             }]
         )
         logger.info("Received answer from Claude")

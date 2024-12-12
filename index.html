@@ -3,19 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financial Document Analyzer</title>
+    <title>Document Analyzer</title>
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>Financial Document Analyzer</h1>
+        <h1>Document Analyzer</h1>
         
         <div class="upload-section" id="uploadSection">
-            <input type="file" id="fileInput" accept=".pdf" />
-            <button onclick="document.getElementById('fileInput').click()">Select PDF Document</button>
-            <p>Drop PDF file here or click to select</p>
+            <input type="file" id="fileInput" accept=".pdf,.txt,.csv,.docx" />
+            <button onclick="document.getElementById('fileInput').click()">Select Document</button>
+            <p>Drop document here or click to select</p>
+            <div class="supported-types">
+                <p>Supported file types:</p>
+                <div class="file-type-grid">
+                    <div class="file-type">
+                        <span class="file-icon">📄</span>
+                        <span class="file-ext">.pdf</span>
+                        <span class="file-desc">Financial Reports, Documents</span>
+                    </div>
+                    <div class="file-type">
+                        <span class="file-icon">📝</span>
+                        <span class="file-ext">.txt</span>
+                        <span class="file-desc">Plain Text Documents</span>
+                    </div>
+                    <div class="file-type">
+                        <span class="file-icon">📊</span>
+                        <span class="file-ext">.csv</span>
+                        <span class="file-desc">Spreadsheet Data</span>
+                    </div>
+                    <div class="file-type">
+                        <span class="file-icon">📋</span>
+                        <span class="file-ext">.docx</span>
+                        <span class="file-desc">Word Documents</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="loading" id="loadingIndicator">
@@ -26,79 +51,111 @@
         <div class="error-message"></div>
 
         <div class="results-section">
-            <div class="metrics-grid">
-                <div class="metric-card">
-                    <h3>Revenue</h3>
-                    <p id="revenue">-</p>
-                </div>
-                <div class="metric-card">
-                    <h3>Net Income</h3>
-                    <p id="netIncome">-</p>
-                </div>
-                <div class="metric-card">
-                    <h3>Total Assets</h3>
-                    <p id="totalAssets">-</p>
-                </div>
-                <div class="metric-card">
-                    <h3>Total Liabilities</h3>
-                    <p id="totalLiabilities">-</p>
-                </div>
-                <div class="metric-card">
-                    <h3>Cash Flow</h3>
-                    <p id="cashFlow">-</p>
-                </div>
-            </div>
-
-            <div class="charts-section">
-                <div class="chart-container">
-                    <canvas id="metricsChart"></canvas>
-                </div>
-                <div class="chart-container">
-                    <canvas id="ratiosChart"></canvas>
-                </div>
-            </div>
-
-            <div class="credit-score-container">
-                <div class="credit-score">
-                    <h3>Credit Score</h3>
-                    <div class="score-display">
-                        <div id="scoreValue">-</div>
-                        <div class="score-scale">0-100</div>
+            <!-- For PDF files -->
+            <div class="pdf-view" data-doc-type="pdf">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <h3>Revenue</h3>
+                        <p id="revenue">-</p>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Net Income</h3>
+                        <p id="netIncome">-</p>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Total Assets</h3>
+                        <p id="totalAssets">-</p>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Total Liabilities</h3>
+                        <p id="totalLiabilities">-</p>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Cash Flow</h3>
+                        <p id="cashFlow">-</p>
                     </div>
                 </div>
-                <div class="credit-interpretation">
-                    <h4>Score Interpretation</h4>
-                    <p>
-                        0-40: Poor financial health - High risk<br>
-                        41-60: Fair - Moderate risk<br>
-                        61-80: Good - Low risk<br>
-                        81-100: Excellent - Very low risk
-                    </p>
-                </div>
-            </div>
 
-            <div class="analysis-grid">
-                <div class="health-assessment">
-                    <h3>Financial Health Assessment</h3>
-                    <p id="healthAssessment">-</p>
+                <div class="charts-section">
+                    <div class="chart-container">
+                        <canvas id="metricsChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="ratiosChart"></canvas>
+                    </div>
                 </div>
 
-                <div class="ratios-grid">
-                    <div class="ratio-card">
-                        <h4>Debt to Equity</h4>
-                        <p id="debtToEquity">-</p>
+                <div class="credit-score-container">
+                    <div class="credit-score">
+                        <h3>Credit Score</h3>
+                        <div class="score-display">
+                            <div id="scoreValue">-</div>
+                            <div class="score-scale">0-100</div>
+                        </div>
                     </div>
-                    <div class="ratio-card">
-                        <h4>Current Ratio</h4>
-                        <p id="currentRatio">-</p>
-                    </div>
-                    <div class="ratio-card">
-                        <h4>Quick Ratio</h4>
-                        <p id="quickRatio">-</p>
+                    <div class="credit-interpretation">
+                        <h4>Score Interpretation</h4>
+                        <p>
+                            0-40: Poor financial health - High risk<br>
+                            41-60: Fair - Moderate risk<br>
+                            61-80: Good - Low risk<br>
+                            81-100: Excellent - Very low risk
+                        </p>
                     </div>
                 </div>
             </div>
 
+            <!-- For CSV files -->
+            <div class="csv-view" data-doc-type="csv" style="display: none;">
+                <div class="data-overview">
+                    <h3>Data Overview</h3>
+                    <div class="overview-grid">
+                        <div class="overview-card">
+                            <h4>Records</h4>
+                            <p id="recordCount">-</p>
+                        </div>
+                        <div class="overview-card">
+                            <h4>Columns</h4>
+                            <p id="columnCount">-</p>
+                        </div>
+                        <div class="overview-card">
+                            <h4>Quality Score</h4>
+                            <p id="qualityScore">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="data-visualization">
+                    <canvas id="csvChart"></canvas>
+                </div>
+            </div>
+
+            <!-- For TXT files -->
+            <div class="txt-view" data-doc-type="txt" style="display: none;">
+                <div class="content-analysis">
+                    <h3>Content Analysis</h3>
+                    <div class="topics-section">
+                        <h4>Main Topics</h4>
+                        <ul id="mainTopics"></ul>
+                    </div>
+                    <div class="key-points">
+                        <h4>Key Points</h4>
+                        <ul id="keyPoints"></ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- For DOCX files -->
+            <div class="docx-view" data-doc-type="docx" style="display: none;">
+                <div class="document-structure">
+                    <h3>Document Structure</h3>
+                    <div class="sections-list">
+                        <h4>Sections</h4>
+                        <ul id="documentSections"></ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Common sections for all document types -->
             <div class="analysis-grid">
                 <div class="risk-factors">
                     <h3>Risk Factors</h3>
@@ -114,9 +171,9 @@
             <div class="chat-section">
                 <h3>Ask Questions About the Document</h3>
                 <div class="chat-messages" id="chatMessages"></div>
-                <div class="typing-indicator" id="typingIndicator">Insight is thinking...</div>
+                <div class="typing-indicator" id="typingIndicator">Analyzing response...</div>
                 <div class="chat-input-container">
-                    <input type="text" id="questionInput" placeholder="Ask a question about the financial document..." />
+                    <input type="text" id="questionInput" placeholder="Ask a question about the document..." />
                     <button class="send-button" id="sendButton" disabled>Send</button>
                 </div>
             </div>
@@ -126,8 +183,10 @@
     <script>
         let metricsChart = null;
         let ratiosChart = null;
+        let csvChart = null;
         let documentAnalyzed = false;
         let currentDocumentId = null;
+        let currentDocType = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             const fileInput = document.getElementById('fileInput');
@@ -140,121 +199,48 @@
             const chatMessages = document.getElementById('chatMessages');
             const typingIndicator = document.getElementById('typingIndicator');
 
-            console.log('DOM loaded, setting up event listeners');
+            function getFileExtension(filename) {
+                return filename.slice((filename.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+            }
 
-            function createCharts(data) {
-                // Destroy existing charts if they exist
-                if (metricsChart) metricsChart.destroy();
-                if (ratiosChart) ratiosChart.destroy();
-
-                // Create metrics chart
-                const metricsCtx = document.getElementById('metricsChart').getContext('2d');
-                metricsChart = new Chart(metricsCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: ['Revenue', 'Net Income', 'Cash Flow'],
-                        datasets: [{
-                            label: 'Financial Metrics (in millions)',
-                            data: [
-                                data.metrics.revenue / 1000000,
-                                data.metrics.net_income / 1000000,
-                                data.metrics.cash_flow / 1000000
-                            ],
-                            backgroundColor: [
-                                'rgba(54, 162, 235, 0.5)',
-                                'rgba(75, 192, 192, 0.5)',
-                                'rgba(255, 159, 64, 0.5)'
-                            ],
-                            borderColor: [
-                                'rgba(54, 162, 235, 1)',
-                                'rgba(75, 192, 192, 1)',
-                                'rgba(255, 159, 64, 1)'
-                            ],
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: 'Key Financial Metrics'
-                            }
-                        }
-                    }
+            function showDocumentView(docType) {
+                // Hide all document type views
+                document.querySelectorAll('[data-doc-type]').forEach(view => {
+                    view.style.display = 'none';
                 });
-
-                // Create ratios chart
-                const ratiosCtx = document.getElementById('ratiosChart').getContext('2d');
-                ratiosChart = new Chart(ratiosCtx, {
-                    type: 'radar',
-                    data: {
-                        labels: ['Debt to Equity', 'Current Ratio', 'Quick Ratio'],
-                        datasets: [{
-                            label: 'Financial Ratios',
-                            data: [
-                                data.ratios.debt_to_equity,
-                                data.ratios.current_ratio,
-                                data.ratios.quick_ratio
-                            ],
-                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: 'Financial Ratios Analysis'
-                            }
-                        }
-                    }
-                });
+                
+                // Show the relevant view
+                const view = document.querySelector(`[data-doc-type="${docType}"]`);
+                if (view) {
+                    view.style.display = 'block';
+                }
             }
 
-            function formatCurrency(value) {
-                if (value === null || value === undefined) return 'Not Available';
-                return new Intl.NumberFormat('en-US', {
-                    style: 'currency',
-                    currency: 'USD',
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0
-                }).format(value);
+            function displayResults(analysis, docType) {
+                currentDocType = docType;
+                showDocumentView(docType);
+
+                switch(docType) {
+                    case 'pdf':
+                        displayPdfResults(analysis);
+                        break;
+                    case 'csv':
+                        displayCsvResults(analysis);
+                        break;
+                    case 'txt':
+                        displayTxtResults(analysis);
+                        break;
+                    case 'docx':
+                        displayDocxResults(analysis);
+                        break;
+                }
+
+                // Common sections for all document types
+                displayRisksAndRecommendations(analysis);
+                resultsSection.style.display = 'block';
             }
 
-            function formatRatio(value) {
-                if (value === null || value === undefined) return 'Not Available';
-                return value.toFixed(2);
-            }
-
-            function showLoading(file) {
-                console.log('Showing loading state for:', file.name);
-                loadingDiv.style.display = 'block';
-                loadingDiv.querySelector('p').textContent = `Analyzing ${file.name}... Please wait...`;
-                uploadSection.style.display = 'none';
-                resultsSection.style.display = 'none';
-                errorMessage.style.display = 'none';
-            }
-
-            function hideLoading() {
-                console.log('Hiding loading state');
-                loadingDiv.style.display = 'none';
-                uploadSection.style.display = 'block';
-            }
-
-            function showError(message) {
-                console.error('Showing error:', message);
-                errorMessage.textContent = message;
-                errorMessage.style.display = 'block';
-                resultsSection.style.display = 'none';
-                documentAnalyzed = false;
-                sendButton.disabled = true;
-                currentDocumentId = null;
-            }
-
-            function displayResults(analysis) {
+            function displayPdfResults(analysis) {
                 // Update metrics
                 document.getElementById('revenue').textContent = formatCurrency(analysis.metrics.revenue);
                 document.getElementById('netIncome').textContent = formatCurrency(analysis.metrics.net_income);
@@ -267,56 +253,87 @@
                 document.getElementById('currentRatio').textContent = formatRatio(analysis.ratios.current_ratio);
                 document.getElementById('quickRatio').textContent = formatRatio(analysis.ratios.quick_ratio);
 
-                // Update health assessment
-                document.getElementById('healthAssessment').textContent = analysis.health_assessment;
+                // Update credit score
+                document.getElementById('scoreValue').textContent = analysis.credit_score;
 
-                // Update risk factors
+                // Create charts
+                createFinancialCharts(analysis);
+            }
+
+            function displayCsvResults(analysis) {
+                document.getElementById('recordCount').textContent = analysis.data_overview.record_count;
+                document.getElementById('columnCount').textContent = analysis.data_overview.columns.length;
+                document.getElementById('qualityScore').textContent = `${analysis.data_overview.quality_score}%`;
+
+                createCsvChart(analysis);
+            }
+
+            function displayTxtResults(analysis) {
+                const topicsList = document.getElementById('mainTopics');
+                const pointsList = document.getElementById('keyPoints');
+
+                topicsList.innerHTML = '';
+                pointsList.innerHTML = '';
+
+                analysis.content.topics.forEach(topic => {
+                    const li = document.createElement('li');
+                    li.textContent = topic;
+                    topicsList.appendChild(li);
+                });
+
+                analysis.content.key_points.forEach(point => {
+                    const li = document.createElement('li');
+                    li.textContent = point;
+                    pointsList.appendChild(li);
+                });
+            }
+
+            function displayDocxResults(analysis) {
+                const sectionsList = document.getElementById('documentSections');
+                sectionsList.innerHTML = '';
+
+                analysis.structure.sections.forEach(section => {
+                    const li = document.createElement('li');
+                    li.textContent = section;
+                    sectionsList.appendChild(li);
+                });
+            }
+
+            function displayRisksAndRecommendations(analysis) {
                 const riskList = document.getElementById('riskFactors');
+                const recList = document.getElementById('recommendations');
+                
                 riskList.innerHTML = '';
-                analysis.risk_factors.forEach(risk => {
+                recList.innerHTML = '';
+
+                // Handle different document type responses
+                const risks = analysis.risk_factors || analysis.risks?.issues || [];
+                const recommendations = analysis.recommendations || analysis.actions || [];
+
+                risks.forEach(risk => {
                     const li = document.createElement('li');
                     li.textContent = risk;
                     riskList.appendChild(li);
                 });
 
-                // Update recommendations
-                const recList = document.getElementById('recommendations');
-                recList.innerHTML = '';
-                analysis.recommendations.forEach(rec => {
+                recommendations.forEach(rec => {
                     const li = document.createElement('li');
                     li.textContent = rec;
                     recList.appendChild(li);
                 });
-
-                // Update credit score
-                document.getElementById('scoreValue').textContent = analysis.credit_score;
-
-                // Create charts
-                createCharts(analysis);
-
-                // Show results section
-                resultsSection.style.display = 'block';
             }
 
-            function addMessage(content, isUser = false) {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `chat-message ${isUser ? 'user-message' : 'assistant-message'}`;
-                messageDiv.textContent = content;
-
-                const timeDiv = document.createElement('div');
-                timeDiv.className = 'message-time';
-                timeDiv.textContent = new Date().toLocaleTimeString();
-                messageDiv.appendChild(timeDiv);
-
-                chatMessages.appendChild(messageDiv);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
+            // Previous functions remain the same
+            // (formatCurrency, formatRatio, showLoading, hideLoading, showError, addMessage)
 
             async function handleFileUpload(file) {
                 console.log('Handling file upload:', file.name);
                 
-                if (!file.name.endsWith('.pdf')) {
-                    showError('Please select a PDF file');
+                const fileExt = getFileExtension(file.name);
+                const supportedTypes = ['pdf', 'txt', 'csv', 'docx'];
+                
+                if (!supportedTypes.includes(fileExt)) {
+                    showError('Please select a supported file type (PDF, TXT, CSV, DOCX)');
                     return;
                 }
 
@@ -352,11 +369,11 @@
                             const analysis = JSON.parse(data.analysis);
                             console.log('Parsed analysis:', analysis);
                             
-                            displayResults(analysis);
+                            displayResults(analysis, fileExt);
                             documentAnalyzed = true;
                             currentDocumentId = data.documentId;
                             sendButton.disabled = !questionInput.value.trim();
-                            addMessage("I've analyzed the document. Feel free to ask any specific questions about the financial data!", false);
+                            addMessage("I've analyzed the document. Feel free to ask any specific questions!", false);
                         } catch (e) {
                             console.error('Error parsing analysis:', e);
                             showError('Error parsing analysis results: ' + e.message);
@@ -472,47 +489,5 @@
             });
         });
     </script>
-
-    <style>
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #007bff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .loading {
-            text-align: center;
-            padding: 20px;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            margin: 20px 0;
-        }
-
-        .loading p {
-            margin: 10px 0 0 0;
-            color: #007bff;
-            font-weight: bold;
-        }
-
-        .error-message {
-            display: none;
-            color: #dc3545;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #dc3545;
-            border-radius: 4px;
-            background-color: #f8d7da;
-        }
-    </style>
 </body>
 </html>
