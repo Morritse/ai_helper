@@ -1,126 +1,84 @@
 # Financial Document Analyzer
 
-A web application that analyzes financial documents using Claude AI to assess creditworthiness and provide financial insights.
+A web application that analyzes financial documents in PDF format and assesses the creditworthiness of companies based on metrics in the reports. The application uses Claude AI to extract and analyze financial data, providing detailed insights, recommendations, and allowing users to ask questions about the analyzed documents.
 
 ## Features
 
-- PDF document analysis
+- PDF document upload and analysis
 - Key financial metrics extraction
 - Financial health assessment
-- Risk analysis
-- Credit scoring
-- Interactive Q&A about the document
-- Visual charts and graphs
-- Real-time analysis
+- Risk factor analysis
+- Strategic recommendations
+- Creditworthiness evaluation
+- Interactive Q&A about the analyzed document
+- Visual representation of financial data through charts
 
-## Deployment to Vercel
+## Tech Stack
 
-1. Install Vercel CLI (use sudo for global installation):
+- Frontend: HTML, CSS, JavaScript
+- Backend: Python with Flask
+- AI: Anthropic's Claude API
+- PDF Processing: PyPDF2
+- Charts: Chart.js
+- Deployment: Vercel
+
+## Setup
+
+1. Clone the repository:
 ```bash
-sudo npm i -g vercel
+git clone https://github.com/yourusername/financial-document-analyzer.git
+cd financial-document-analyzer
 ```
 
-2. Login to Vercel:
-```bash
-vercel login
-```
-
-3. Initialize Git repository (if not already done):
-```bash
-git init
-git add .
-git commit -m "Initial commit"
-```
-
-4. Deploy the application:
-```bash
-vercel
-```
-When prompted:
-- Set up and deploy: Yes
-- Link to existing project: No
-- Project name: (choose a name)
-- Directory: ./
-- Override settings: No
-
-5. Set up environment variables in Vercel:
-   - Go to your project settings in Vercel dashboard
-   - Add the following environment variable:
-     - `ANTHROPIC_API_KEY`: Your Claude API key
-
-## Local Development
-
-1. Clone the repository
-
-2. Create a virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. Install dependencies:
+2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Create a .env file with your API key:
+3. Set up environment variables:
+Create a `.env` file in the root directory and add:
 ```
 ANTHROPIC_API_KEY=your_api_key_here
 ```
 
-5. Run the application:
+4. Run the application:
 ```bash
 python app.py
 ```
 
-The application will be available at http://localhost:5000
-
 ## Usage
 
-1. Upload a financial PDF document
+1. Upload a financial document (PDF format)
 2. View the automated analysis including:
    - Key financial metrics
-   - Health assessment
+   - Financial health assessment
    - Risk factors
    - Recommendations
    - Credit score
-3. Use the chat interface to ask specific questions about the document
+3. Ask questions about the document using the chat interface
 
-## Technology Stack
+## Project Structure
 
-- Backend: Flask (Python)
-- Frontend: HTML, CSS, JavaScript
-- AI: Claude API (Anthropic)
-- Charts: Chart.js
-- Deployment: Vercel
-
-## Troubleshooting Deployment
-
-If you encounter permission issues:
-1. Make sure you're using sudo for global npm installations:
-```bash
-sudo npm i -g vercel
+```
+├── app.py              # Main Flask application
+├── config.py           # Configuration settings
+├── requirements.txt    # Python dependencies
+├── static/            
+│   └── css/           
+│       └── styles.css  # Application styles
+├── templates/         
+│   └── index.html     # Main HTML template
+└── vercel.json        # Vercel deployment configuration
 ```
 
-2. If you still have issues, you can:
-   - Install vercel locally in the project:
-   ```bash
-   npm init -y
-   npm install vercel
-   npx vercel
-   ```
-   
-   - Or use npm with the --prefix flag:
-   ```bash
-   npm i -g vercel --prefix ~/.local
-   ```
-   Then add ~/.local/bin to your PATH:
-   ```bash
-   export PATH=~/.local/bin:$PATH
-   ```
+## Contributing
 
-## Notes
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-- The application uses in-memory storage for document text. In a production environment, consider using a proper database.
-- API keys should be kept secure and never committed to version control.
-- The credit score is based on available financial metrics and should be used as one of many factors in decision-making.
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

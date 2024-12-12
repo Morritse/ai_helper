@@ -16,16 +16,11 @@ lib64/
 parts/
 sdist/
 var/
-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 
-# Virtual Environment
-venv/
-ENV/
-
-# Environment Variables
+# Environment variables
 .env
 
 # IDE
@@ -34,5 +29,6 @@ ENV/
 *.swp
 *.swo
 
-# Vercel
-.vercel
+# OS
+.DS_Store
+Thumbs.db
