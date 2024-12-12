@@ -24,26 +24,6 @@
             "dest": "/static/$1"
         },
         {
-            "src": "/templates",
-            "methods": ["GET", "OPTIONS"],
-            "dest": "app.py",
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type"
-            }
-        },
-        {
-            "src": "/create_template",
-            "methods": ["POST", "OPTIONS"],
-            "dest": "app.py",
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type"
-            }
-        },
-        {
             "src": "/analyze",
             "methods": ["POST", "OPTIONS"],
             "dest": "app.py",

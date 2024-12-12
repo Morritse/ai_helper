@@ -27,7 +27,7 @@ if not api_key:
     logger.error("ANTHROPIC_API_KEY not found in environment variables")
     raise ValueError("ANTHROPIC_API_KEY environment variable is required")
 
-client = anthropic.Anthropic()
+client = anthropic.Anthropic(api_key=api_key)
 logger.info("Initialized Anthropic client")
 
 # In-memory document store
@@ -86,7 +86,7 @@ def analyze_document():
         try:
             logger.info("Sending text to Claude for analysis")
             message = client.messages.create(
-                model="claude-3-sonnet-20240229",
+                model="claude-3-5-sonnet-20241022",
                 max_tokens=4000,
                 temperature=0,
                 messages=[{
@@ -206,7 +206,7 @@ def ask():
     try:
         logger.info("Sending question to Claude")
         message = client.messages.create(
-            model="claude-3-sonnet-20240229",
+            model="claude-3-5-sonnet-20241022",
             max_tokens=4000,
             temperature=0,
             messages=[{
