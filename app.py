@@ -11,6 +11,10 @@ import sys
 import traceback
 import pandas as pd
 import docx2txt
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -29,7 +33,7 @@ if not api_key:
     logger.error("ANTHROPIC_API_KEY not found in environment variables")
     raise ValueError("ANTHROPIC_API_KEY environment variable is required")
 
-client = anthropic.Anthropic()
+client = anthropic.Anthropic(api_key=api_key)
 logger.info("Initialized Anthropic client")
 
 # In-memory document store
@@ -37,25 +41,74 @@ document_store = {}
 
 def extract_text_from_pdf(file_content):
     """Extract text from PDF file"""
-    pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text()
-    return text
+    try:
+        pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+        text = ""
+        for page in pdf_reader.pages:
+            text += page.extract_text() + "\n"
+        return text.strip()
+    except Exception as e:
+        logger.error(f"Error extracting text from PDF: {str(e)}")
+        raise ValueError("Failed to extract text from PDF file")
 
 def extract_text_from_txt(file_content):
     """Extract text from TXT file"""
-    return file_content.decode('utf-8')
+    try:
+        return file_content.decode('utf-8').strip()
+    except Exception as e:
+        logger.error(f"Error extracting text from TXT: {str(e)}")
+        raise ValueError("Failed to read TXT file")
 
 def extract_text_from_csv(file_content):
     """Extract text from CSV file and convert to structured text"""
-    df = pd.read_csv(io.BytesIO(file_content))
-    # Convert DataFrame to a structured string representation
-    return df.to_string()
+    try:
+        # Try to read the CSV content
+        df = pd.read_csv(io.BytesIO(file_content))
+        
+        # Verify that the DataFrame is not empty
+        if df.empty:
+            raise ValueError("CSV file is empty")
+            
+        # Verify that we have valid columns
+        if len(df.columns) == 0:
+            raise ValueError("No columns found in CSV file")
+            
+        # Add column headers
+        text = "Columns:\n" + ", ".join(df.columns) + "\n\n"
+        
+        # Add data summary
+        text += f"Records: {len(df)}\n\n"
+        
+        # Add data preview
+        text += "Data Preview:\n" + df.head().to_string()
+        
+        # Add basic statistics for numerical columns
+        numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+        if len(numeric_cols) > 0:
+            text += "\n\nNumerical Columns Statistics:\n"
+            text += df[numeric_cols].describe().to_string()
+            
+        return text
+    except pd.errors.EmptyDataError:
+        logger.error("Empty CSV file")
+        raise ValueError("CSV file is empty")
+    except pd.errors.ParserError:
+        logger.error("Invalid CSV format")
+        raise ValueError("Invalid CSV format")
+    except Exception as e:
+        logger.error(f"Error extracting text from CSV: {str(e)}")
+        raise ValueError(f"Failed to process CSV file: {str(e)}")
 
 def extract_text_from_docx(file_content):
     """Extract text from DOCX file"""
-    return docx2txt.process(io.BytesIO(file_content))
+    try:
+        text = docx2txt.process(io.BytesIO(file_content))
+        if not text or not text.strip():
+            raise ValueError("No text content found in DOCX file")
+        return text.strip()
+    except Exception as e:
+        logger.error(f"Error extracting text from DOCX: {str(e)}")
+        raise ValueError("Failed to extract text from DOCX file")
 
 # Document type handlers
 DOCUMENT_HANDLERS = {
@@ -68,7 +121,55 @@ DOCUMENT_HANDLERS = {
 # Analysis prompts for different document types
 ANALYSIS_PROMPTS = {
     '.pdf': """Analyze this financial document and provide:
-    [Previous PDF analysis prompt]""",
+    1. Key financial metrics:
+       - Extract and verify all numerical values
+       - Convert text-based numbers to numerical format
+       - Identify and standardize units (thousands, millions, etc.)
+    
+    2. Financial health assessment:
+       - Analyze current financial position
+       - Compare against industry standards
+       - Identify trends and patterns
+       - Evaluate operational efficiency
+    
+    3. Risk assessment:
+       - Identify potential red flags
+       - Analyze debt structure and obligations
+       - Evaluate market and industry risks
+       - Consider regulatory compliance issues
+    
+    4. Strategic recommendations:
+       - Provide actionable insights
+       - Suggest areas for improvement
+       - Recommend risk mitigation strategies
+       - Outline potential growth opportunities
+    
+    5. Creditworthiness evaluation:
+       - Calculate key financial ratios
+       - Compare to industry benchmarks
+       - Consider qualitative factors
+       - Provide a score from 0-100 with detailed justification
+    
+    Format as JSON with structure:
+    {
+        "metrics": {
+            "revenue": number,
+            "net_income": number,
+            "total_assets": number,
+            "total_liabilities": number,
+            "cash_flow": number
+        },
+        "health_assessment": "string",
+        "risk_factors": ["string"],
+        "recommendations": ["string"],
+        "credit_score": number,
+        "ratios": {
+            "debt_to_equity": number,
+            "current_ratio": number,
+            "quick_ratio": number
+        },
+        "analysis_confidence": number
+    }""",
     
     '.csv': """Analyze this CSV data and provide:
     1. Data Overview:
@@ -231,7 +332,7 @@ def analyze_document():
                 
         except Exception as e:
             logger.error(f"Error extracting text from file: {str(e)}\n{traceback.format_exc()}")
-            return jsonify({'error': f'Failed to read {file_ext} file'}), 400
+            return jsonify({'error': str(e)}), 400
         
         # Generate document ID and store text
         doc_id = str(hash(text))
@@ -247,23 +348,40 @@ def analyze_document():
                 temperature=0,
                 messages=[{
                     "role": "user",
-                    "content": ANALYSIS_PROMPTS[file_ext] + f"\n\nHere's the document text:\n{text}"
+                    "content": ANALYSIS_PROMPTS[file_ext] + f"\n\nHere's the document text:\n{text}\n\nRemember to format your response as JSON according to the structure specified above."
                 }]
             )
             
             logger.info("Received response from Claude")
             response_text = message.content[0].text
+            logger.info(f"Claude response: {response_text}")
             
             # Fix and validate JSON
             try:
-                json_str = re.search(r'\{.*\}', response_text, re.DOTALL).group(0)
-                json_str = re.sub(r'(\d+|\btrue\b|\bfalse\b|\bnull\b|"[^"]*")\s+(?=["{\[]|[a-zA-Z])', r'\1,', json_str)
-                json_str = re.sub(r'(\}|\]|\d+|"[^"]*")\s*\n\s*"', r'\1,\n"', json_str)
-                json_str = re.sub(r',(\s*[\]}])', r'\1', json_str)
+                # First try to parse the entire response as JSON
+                try:
+                    json_str = json.loads(response_text)
+                    json_str = json.dumps(json_str)
+                except json.JSONDecodeError:
+                    # If that fails, try to extract JSON using regex
+                    match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                    if not match:
+                        logger.error("No JSON object found in response")
+                        logger.error(f"Response text: {response_text}")
+                        return jsonify({'error': 'Invalid analysis format received'}), 500
+                    
+                    json_str = match.group(0)
+                    
+                    # Clean up the extracted JSON
+                    json_str = re.sub(r'(\d+|\btrue\b|\bfalse\b|\bnull\b|"[^"]*")\s+(?=["{\[]|[a-zA-Z])', r'\1,', json_str)
+                    json_str = re.sub(r'(\}|\]|\d+|"[^"]*")\s*\n\s*"', r'\1,\n"', json_str)
+                    json_str = re.sub(r',(\s*[\]}])', r'\1', json_str)
+                    
+                    # Validate the cleaned JSON
+                    json.loads(json_str)
                 
-                # Validate JSON
-                json.loads(json_str)
                 logger.info("Successfully processed and validated JSON response")
+                logger.info(f"Processed JSON: {json_str}")
                 
                 return jsonify({
                     'analysis': json_str,
@@ -271,6 +389,7 @@ def analyze_document():
                 })
             except Exception as e:
                 logger.error(f"Error processing Claude response: {str(e)}\n{traceback.format_exc()}")
+                logger.error(f"Response text that caused error: {response_text}")
                 return jsonify({'error': 'Failed to process analysis results'}), 500
                 
         except Exception as e:

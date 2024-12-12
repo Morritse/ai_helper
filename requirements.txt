@@ -8,3 +8,4 @@ Werkzeug==2.3.7
 pandas==2.2.0
 docx2txt==0.8
 numpy==1.26.3
+python-docx==1.0.1

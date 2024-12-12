@@ -48,7 +48,7 @@
             <p>Analyzing document... Please wait...</p>
         </div>
 
-        <div class="error-message"></div>
+        <div class="error-message" id="errorMessage"></div>
 
         <div class="results-section">
             <!-- For PDF files -->
@@ -192,31 +192,74 @@
             const fileInput = document.getElementById('fileInput');
             const loadingDiv = document.getElementById('loadingIndicator');
             const resultsSection = document.querySelector('.results-section');
-            const errorMessage = document.querySelector('.error-message');
+            const errorMessageDiv = document.getElementById('errorMessage');
             const uploadSection = document.getElementById('uploadSection');
             const questionInput = document.getElementById('questionInput');
             const sendButton = document.getElementById('sendButton');
             const chatMessages = document.getElementById('chatMessages');
             const typingIndicator = document.getElementById('typingIndicator');
 
+            function showLoading() {
+                loadingDiv.style.display = 'block';
+                errorMessageDiv.style.display = 'none';
+                resultsSection.style.display = 'none';
+            }
+
+            function hideLoading() {
+                loadingDiv.style.display = 'none';
+            }
+
+            function showError(message) {
+                console.error('Error:', message);
+                errorMessageDiv.textContent = message;
+                errorMessageDiv.style.display = 'block';
+                hideLoading();
+            }
+
+            function addMessage(text, isUser) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `chat-message ${isUser ? 'user-message' : 'assistant-message'}`;
+                messageDiv.textContent = text;
+                
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'message-time';
+                timeDiv.textContent = new Date().toLocaleTimeString();
+                messageDiv.appendChild(timeDiv);
+                
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
             function getFileExtension(filename) {
                 return filename.slice((filename.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
             }
 
             function showDocumentView(docType) {
-                // Hide all document type views
+                console.log('Showing document view for type:', docType);
                 document.querySelectorAll('[data-doc-type]').forEach(view => {
                     view.style.display = 'none';
                 });
                 
-                // Show the relevant view
                 const view = document.querySelector(`[data-doc-type="${docType}"]`);
                 if (view) {
                     view.style.display = 'block';
                 }
             }
 
+            function formatCurrency(value) {
+                if (value === undefined || value === null) return '-';
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }).format(value);
+            }
+
             function displayResults(analysis, docType) {
+                console.log('Displaying results for document type:', docType);
+                console.log('Analysis:', analysis);
+                
                 currentDocType = docType;
                 showDocumentView(docType);
 
@@ -224,11 +267,11 @@
                     case 'pdf':
                         displayPdfResults(analysis);
                         break;
-                    case 'csv':
-                        displayCsvResults(analysis);
-                        break;
                     case 'txt':
                         displayTxtResults(analysis);
+                        break;
+                    case 'csv':
+                        displayCsvResults(analysis);
                         break;
                     case 'docx':
                         displayDocxResults(analysis);
@@ -240,66 +283,56 @@
                 resultsSection.style.display = 'block';
             }
 
-            function displayPdfResults(analysis) {
-                // Update metrics
-                document.getElementById('revenue').textContent = formatCurrency(analysis.metrics.revenue);
-                document.getElementById('netIncome').textContent = formatCurrency(analysis.metrics.net_income);
-                document.getElementById('totalAssets').textContent = formatCurrency(analysis.metrics.total_assets);
-                document.getElementById('totalLiabilities').textContent = formatCurrency(analysis.metrics.total_liabilities);
-                document.getElementById('cashFlow').textContent = formatCurrency(analysis.metrics.cash_flow);
-
-                // Update ratios
-                document.getElementById('debtToEquity').textContent = formatRatio(analysis.ratios.debt_to_equity);
-                document.getElementById('currentRatio').textContent = formatRatio(analysis.ratios.current_ratio);
-                document.getElementById('quickRatio').textContent = formatRatio(analysis.ratios.quick_ratio);
-
-                // Update credit score
-                document.getElementById('scoreValue').textContent = analysis.credit_score;
-
-                // Create charts
-                createFinancialCharts(analysis);
-            }
-
-            function displayCsvResults(analysis) {
-                document.getElementById('recordCount').textContent = analysis.data_overview.record_count;
-                document.getElementById('columnCount').textContent = analysis.data_overview.columns.length;
-                document.getElementById('qualityScore').textContent = `${analysis.data_overview.quality_score}%`;
-
-                createCsvChart(analysis);
-            }
-
             function displayTxtResults(analysis) {
+                console.log('Displaying TXT results:', analysis);
                 const topicsList = document.getElementById('mainTopics');
                 const pointsList = document.getElementById('keyPoints');
 
                 topicsList.innerHTML = '';
                 pointsList.innerHTML = '';
 
-                analysis.content.topics.forEach(topic => {
-                    const li = document.createElement('li');
-                    li.textContent = topic;
-                    topicsList.appendChild(li);
-                });
+                if (analysis.content && analysis.content.topics) {
+                    analysis.content.topics.forEach(topic => {
+                        const li = document.createElement('li');
+                        li.textContent = topic;
+                        topicsList.appendChild(li);
+                    });
+                }
 
-                analysis.content.key_points.forEach(point => {
-                    const li = document.createElement('li');
-                    li.textContent = point;
-                    pointsList.appendChild(li);
-                });
+                if (analysis.content && analysis.content.key_points) {
+                    analysis.content.key_points.forEach(point => {
+                        const li = document.createElement('li');
+                        li.textContent = point;
+                        pointsList.appendChild(li);
+                    });
+                }
+            }
+
+            function displayCsvResults(analysis) {
+                console.log('Displaying CSV results:', analysis);
+                if (analysis.data_overview) {
+                    document.getElementById('recordCount').textContent = analysis.data_overview.record_count;
+                    document.getElementById('columnCount').textContent = analysis.data_overview.columns.length;
+                    document.getElementById('qualityScore').textContent = `${analysis.data_overview.quality_score}%`;
+                }
             }
 
             function displayDocxResults(analysis) {
+                console.log('Displaying DOCX results:', analysis);
                 const sectionsList = document.getElementById('documentSections');
                 sectionsList.innerHTML = '';
 
-                analysis.structure.sections.forEach(section => {
-                    const li = document.createElement('li');
-                    li.textContent = section;
-                    sectionsList.appendChild(li);
-                });
+                if (analysis.structure && analysis.structure.sections) {
+                    analysis.structure.sections.forEach(section => {
+                        const li = document.createElement('li');
+                        li.textContent = section;
+                        sectionsList.appendChild(li);
+                    });
+                }
             }
 
             function displayRisksAndRecommendations(analysis) {
+                console.log('Displaying risks and recommendations:', analysis);
                 const riskList = document.getElementById('riskFactors');
                 const recList = document.getElementById('recommendations');
                 
@@ -307,7 +340,7 @@
                 recList.innerHTML = '';
 
                 // Handle different document type responses
-                const risks = analysis.risk_factors || analysis.risks?.issues || [];
+                const risks = analysis.risk_factors || (analysis.risks && analysis.risks.issues) || [];
                 const recommendations = analysis.recommendations || analysis.actions || [];
 
                 risks.forEach(risk => {
@@ -323,24 +356,121 @@
                 });
             }
 
-            // Previous functions remain the same
-            // (formatCurrency, formatRatio, showLoading, hideLoading, showError, addMessage)
+            function displayPdfResults(analysis) {
+                console.log('Displaying PDF results:', analysis);
+                
+                // Update metrics
+                if (analysis.metrics) {
+                    document.getElementById('revenue').textContent = formatCurrency(analysis.metrics.revenue);
+                    document.getElementById('netIncome').textContent = formatCurrency(analysis.metrics.net_income);
+                    document.getElementById('totalAssets').textContent = formatCurrency(analysis.metrics.total_assets);
+                    document.getElementById('totalLiabilities').textContent = formatCurrency(analysis.metrics.total_liabilities);
+                    document.getElementById('cashFlow').textContent = formatCurrency(analysis.metrics.cash_flow);
+
+                    // Create metrics chart
+                    const metricsCtx = document.getElementById('metricsChart').getContext('2d');
+                    if (metricsChart) metricsChart.destroy();
+                    metricsChart = new Chart(metricsCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Revenue', 'Net Income', 'Total Assets', 'Total Liabilities', 'Cash Flow'],
+                            datasets: [{
+                                label: 'Financial Metrics',
+                                data: [
+                                    analysis.metrics.revenue,
+                                    analysis.metrics.net_income,
+                                    analysis.metrics.total_assets,
+                                    analysis.metrics.total_liabilities,
+                                    analysis.metrics.cash_flow
+                                ],
+                                backgroundColor: [
+                                    'rgba(54, 162, 235, 0.5)',
+                                    'rgba(75, 192, 192, 0.5)',
+                                    'rgba(153, 102, 255, 0.5)',
+                                    'rgba(255, 99, 132, 0.5)',
+                                    'rgba(255, 159, 64, 0.5)'
+                                ],
+                                borderColor: [
+                                    'rgba(54, 162, 235, 1)',
+                                    'rgba(75, 192, 192, 1)',
+                                    'rgba(153, 102, 255, 1)',
+                                    'rgba(255, 99, 132, 1)',
+                                    'rgba(255, 159, 64, 1)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        callback: function(value) {
+                                            return formatCurrency(value);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Update credit score
+                if (analysis.credit_score) {
+                    document.getElementById('scoreValue').textContent = analysis.credit_score;
+                }
+
+                // Create ratios chart if available
+                if (analysis.ratios) {
+                    const ratiosCtx = document.getElementById('ratiosChart').getContext('2d');
+                    if (ratiosChart) ratiosChart.destroy();
+                    ratiosChart = new Chart(ratiosCtx, {
+                        type: 'radar',
+                        data: {
+                            labels: ['Debt to Equity', 'Current Ratio', 'Quick Ratio'],
+                            datasets: [{
+                                label: 'Financial Ratios',
+                                data: [
+                                    analysis.ratios.debt_to_equity,
+                                    analysis.ratios.current_ratio,
+                                    analysis.ratios.quick_ratio
+                                ],
+                                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                borderWidth: 2,
+                                pointBackgroundColor: 'rgba(54, 162, 235, 1)'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                r: {
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                }
+            }
 
             async function handleFileUpload(file) {
                 console.log('Handling file upload:', file.name);
                 
                 const fileExt = getFileExtension(file.name);
-                const supportedTypes = ['pdf', 'txt', 'csv', 'docx'];
+                const supportedTypes = ['pdf', 'txt', 'csv', 'docx'];  // Added PDF support
                 
                 if (!supportedTypes.includes(fileExt)) {
-                    showError('Please select a supported file type (PDF, TXT, CSV, DOCX)');
+                    showError(`Unsupported file type: ${fileExt}. Please select a supported file type (PDF, TXT, CSV, DOCX)`);
                     return;
                 }
 
                 const formData = new FormData();
                 formData.append('file', file);
 
-                showLoading(file);
+                showLoading();
 
                 try {
                     console.log('Sending file to server...');
@@ -350,14 +480,20 @@
                     });
 
                     console.log('Response received:', response);
-                    console.log('Response status:', response.status);
+                    const responseText = await response.text();
+                    console.log('Response text:', responseText);
                     
                     if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                        throw new Error(`HTTP error! status: ${response.status}, response: ${responseText}`);
                     }
                     
-                    const data = await response.json();
-                    console.log('Response data:', data);
+                    let data;
+                    try {
+                        data = JSON.parse(responseText);
+                    } catch (e) {
+                        console.error('Error parsing response:', e);
+                        throw new Error('Invalid response format from server');
+                    }
 
                     hideLoading();
                     
@@ -491,3 +627,4 @@
     </script>
 </body>
 </html>
+
